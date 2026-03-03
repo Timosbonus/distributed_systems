@@ -1,5 +1,6 @@
-from pricingApp.domain.entities import Product
-from pricingApp.ports.interfaces import PricePort, DatabasePort
+from src.domain.entities import Product, User
+from src.ports.interfaces import PricePort, DatabasePort
+import hashlib
 
 
 class PricingService:
@@ -42,3 +43,34 @@ class PricingService:
         product = session.query(Product).filter(Product.id == product_id).first()
         session.close()
         return product
+
+
+class AuthService:
+    def __init__(self, database: DatabasePort):
+        self.database = database
+
+    def hash_password(self, password: str) -> str:
+        return hashlib.sha256(password.encode()).hexdigest()
+
+    def register(self, username: str, password: str) -> User | None:
+        session = self.database.get_session()
+        existing = session.query(User).filter(User.username == username).first()
+        if existing:
+            session.close()
+            return None
+        
+        user = User(username=username, password_hash=self.hash_password(password))
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        session.close()
+        return user
+
+    def login(self, username: str, password: str) -> User | None:
+        session = self.database.get_session()
+        user = session.query(User).filter(User.username == username).first()
+        if not user or user.password_hash != self.hash_password(password):
+            session.close()
+            return None
+        session.close()
+        return user

@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float
-from pricingApp.adapters.database import Base
+from src.adapters.database import Base
 
 
 class Product(Base):
@@ -12,3 +12,14 @@ class Product(Base):
 
     def __repr__(self):
         return f"<Product(id={self.id}, name={self.name}, idealo_link={self.idealo_link}, lowest_price={self.lowest_price})>"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username={self.username})>"

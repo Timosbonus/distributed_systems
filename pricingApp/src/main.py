@@ -2,16 +2,17 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
-from pricingApp.adapters.database import Database
-from pricingApp.adapters.scraper import Scraper
-from pricingApp.domain.services import PricingService
-from pricingApp.domain.entities import Product
+from src.adapters.database import Database
+from src.adapters.scraper import Scraper
+from src.domain.services import PricingService, AuthService
+from src.domain.entities import Product
 
 app = FastAPI(title="Pricing App")
 
 db = Database()
 scraper = Scraper()
 pricing_service = PricingService(database=db, scraper=scraper)
+auth_service = AuthService(database=db)
 
 
 class ProductCreate(BaseModel):
@@ -24,6 +25,21 @@ class ProductResponse(BaseModel):
     name: str
     idealo_link: str
     lowest_price: Optional[float] = None
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 @app.post("/products", response_model=ProductResponse)
@@ -65,3 +81,19 @@ def get_product(product_id: int):
         idealo_link=product.idealo_link,
         lowest_price=product.lowest_price
     )
+
+
+@app.post("/auth/register", response_model=UserResponse)
+def register(user: UserCreate):
+    new_user = auth_service.register(username=user.username, password=user.password)
+    if not new_user:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    return UserResponse(id=new_user.id, username=new_user.username)
+
+
+@app.post("/auth/login")
+def login(request: LoginRequest):
+    user = auth_service.login(username=request.username, password=request.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"message": "Login successful", "user_id": user.id, "username": user.username}
