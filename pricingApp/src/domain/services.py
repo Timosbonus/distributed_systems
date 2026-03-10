@@ -1,7 +1,9 @@
-from src.domain.entities import Product, User
+from src.domain.entities import Product, User, PriceHistory
 from src.ports.interfaces import PricePort, DatabasePort
 import hashlib
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime, timedelta
+import json
 
 
 class PricingService:
@@ -9,16 +11,39 @@ class PricingService:
         self.database = database
         self.scraper = scraper
 
-    def add_product(self, name: str, idealo_link: str, quantity: Optional[int] = 0, cost_per_unit: Optional[float] = None, description: Optional[str] = None, image_data: Optional[str] = None) -> Product:
+    def calculate_sell_price(self, lowest_price: float, cost_per_unit: float) -> float:
+        """
+        Calculate sell price based on lowest price and cost.
+        Rules:
+        - Never go below cost_per_unit
+        - If lowest price is above cost, sell at lowest price - 0.01 (to be cheapest)
+        - If lowest price is at or below cost, sell at cost + 1% minimum margin
+        """
+        if lowest_price <= cost_per_unit:
+            return round(cost_per_unit * 1.01, 2)
+        return round(lowest_price - 0.01, 2)
+
+    def add_product(self, name: str, idealo_link: str, quantity: Optional[int] = 0, cost_per_unit: Optional[float] = None, description: Optional[str] = None, image_data: Optional[str] = None, update_interval_hours: Optional[int] = 24) -> Product:
         session = self.database.get_session()
-        product = Product(name=name, idealo_link=idealo_link, lowest_price=None, quantity=quantity, cost_per_unit=cost_per_unit, description=description, image_data=image_data)
+        product = Product(
+            name=name, 
+            idealo_link=idealo_link, 
+            lowest_price=None,
+            lowest_seller=None,
+            quantity=quantity, 
+            cost_per_unit=cost_per_unit, 
+            description=description, 
+            image_data=image_data,
+            update_interval_hours=update_interval_hours,
+            last_price_update=None
+        )
         session.add(product)
         session.commit()
         session.refresh(product)
         session.close()
         return product
 
-    def update_product(self, product_id: int, name: Optional[str] = None, idealo_link: Optional[str] = None, quantity: Optional[int] = None, cost_per_unit: Optional[float] = None, description: Optional[str] = None, image_data: Optional[str] = None) -> Product | None:
+    def update_product(self, product_id: int, name: Optional[str] = None, idealo_link: Optional[str] = None, quantity: Optional[int] = None, cost_per_unit: Optional[float] = None, description: Optional[str] = None, image_data: Optional[str] = None, sell_price: Optional[float] = None, update_interval_hours: Optional[int] = None) -> Product | None:
         session = self.database.get_session()
         product = session.query(Product).filter(Product.id == product_id).first()
         if not product:
@@ -33,15 +58,135 @@ class PricingService:
             product.quantity = quantity
         if cost_per_unit is not None:
             product.cost_per_unit = cost_per_unit
+            if product.lowest_price:
+                product.sell_price = self.calculate_sell_price(product.lowest_price, cost_per_unit)
         if description is not None:
             product.description = description
         if image_data is not None:
             product.image_data = image_data
+        if sell_price is not None:
+            product.sell_price = sell_price
+        if update_interval_hours is not None:
+            product.update_interval_hours = update_interval_hours
         
         session.commit()
         session.refresh(product)
         session.close()
         return product
+
+    def scrape_and_update_price(self, product_id: int) -> dict | None:
+        """
+        Scrape prices from idealo, find cheapest, store in history, and update product.
+        """
+        session = self.database.get_session()
+        product = session.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            session.close()
+            return None
+
+        try:
+            with open('idealo.html', 'r', encoding='utf-8') as f:
+                html_content = f.read()
+        except FileNotFoundError:
+            session.close()
+            return None
+
+        offers = self.scraper.scrape_offers(html_content)
+        if not offers:
+            session.close()
+            return None
+
+        cheapest = min(offers, key=lambda x: x['price'])
+        
+        product.lowest_price = cheapest['price']
+        product.lowest_seller = cheapest['seller']
+        product.last_price_update = datetime.utcnow()
+        
+        if product.cost_per_unit:
+            product.sell_price = self.calculate_sell_price(cheapest['price'], product.cost_per_unit)
+        
+        history_entry = PriceHistory(
+            product_id=product_id,
+            price=cheapest['price'],
+            seller=cheapest['seller'],
+            timestamp=datetime.utcnow()
+        )
+        session.add(history_entry)
+        
+        session.commit()
+        session.refresh(product)
+        session.close()
+        
+        return {
+            'price': cheapest['price'],
+            'seller': cheapest['seller'],
+            'sell_price': product.sell_price
+        }
+
+    def get_products_needing_update(self) -> List[Product]:
+        """
+        Get all products that need their prices updated based on their update interval.
+        """
+        session = self.database.get_session()
+        products = session.query(Product).all()
+        
+        needs_update = []
+        now = datetime.utcnow()
+        
+        for product in products:
+            if product.last_price_update is None:
+                needs_update.append(product)
+            else:
+                interval = timedelta(hours=product.update_interval_hours or 24)
+                if now - product.last_price_update >= interval:
+                    needs_update.append(product)
+        
+        session.close()
+        return needs_update
+
+    def run_scheduled_updates(self) -> dict:
+        """
+        Run scheduled price updates for all products that need updating.
+        """
+        products_to_update = self.get_products_needing_update()
+        results = {
+            'updated': [],
+            'failed': []
+        }
+        
+        for product in products_to_update:
+            try:
+                result = self.scrape_and_update_price(product.id)
+                if result:
+                    results['updated'].append({
+                        'product_id': product.id,
+                        'product_name': product.name,
+                        'price': result['price'],
+                        'seller': result['seller']
+                    })
+                else:
+                    results['failed'].append({
+                        'product_id': product.id,
+                        'product_name': product.name,
+                        'reason': 'No offers found'
+                    })
+            except Exception as e:
+                results['failed'].append({
+                    'product_id': product.id,
+                    'product_name': product.name,
+                    'reason': str(e)
+                })
+        
+        return results
+
+    def get_price_history(self, product_id: int, limit: int = 10) -> List[PriceHistory]:
+        """Get price history for a product."""
+        session = self.database.get_session()
+        history = session.query(PriceHistory).filter(
+            PriceHistory.product_id == product_id
+        ).order_by(PriceHistory.timestamp.desc()).limit(limit).all()
+        session.close()
+        return history
 
     def update_price(self, product_id: int) -> float | None:
         session = self.database.get_session()
@@ -50,13 +195,10 @@ class PricingService:
             session.close()
             return None
 
-        price = self.scraper.scrape_price(product.idealo_link)
-        if price is not None:
-            product.lowest_price = price
-            session.commit()
+        result = self.scrape_and_update_price(product_id)
         
         session.close()
-        return price
+        return result['price'] if result else None
 
     def delete_product(self, product_id: int) -> bool:
         session = self.database.get_session()
@@ -64,6 +206,8 @@ class PricingService:
         if not product:
             session.close()
             return False
+        
+        session.query(PriceHistory).filter(PriceHistory.product_id == product_id).delete()
         
         session.delete(product)
         session.commit()

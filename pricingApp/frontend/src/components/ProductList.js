@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getProducts, addProduct, updateProduct, updateProductPrice, deleteProduct } from '../api/products';
+import { getProducts, addProduct, updateProduct, updateProductPrice, deleteProduct, runScheduler, getSchedulerStatus, getPriceHistory } from '../api/products';
 
 const MAX_IMAGES = 5;
 
@@ -10,6 +10,10 @@ function ProductList() {
   const [error, setError] = useState('');
   const [loadingPrice, setLoadingPrice] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState({});
+  const [schedulerRunning, setSchedulerRunning] = useState(false);
+  const [schedulerStatus, setSchedulerStatus] = useState(null);
+  const [selectedHistory, setSelectedHistory] = useState(null);
+  const [priceHistory, setPriceHistory] = useState([]);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -17,11 +21,15 @@ function ProductList() {
     quantity: 0,
     cost_per_unit: '',
     description: '',
-    image_data: []
+    image_data: [],
+    update_interval_hours: 24
   });
 
   useEffect(() => {
     loadProducts();
+    loadSchedulerStatus();
+    const interval = setInterval(loadSchedulerStatus, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadProducts = async () => {
@@ -30,6 +38,30 @@ function ProductList() {
       setProducts(data);
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const loadSchedulerStatus = async () => {
+    try {
+      const status = await getSchedulerStatus();
+      setSchedulerStatus(status);
+    } catch (err) {
+      console.error('Failed to load scheduler status');
+    }
+  };
+
+  const handleRunScheduler = async () => {
+    setSchedulerRunning(true);
+    setError('');
+    try {
+      const result = await runScheduler();
+      loadProducts();
+      loadSchedulerStatus();
+      alert(`Updated ${result.updated.length} products${result.failed.length > 0 ? `, ${result.failed.length} failed` : ''}`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSchedulerRunning(false);
     }
   };
 
@@ -78,7 +110,7 @@ function ProductList() {
         await addProduct(productData);
       }
       
-      setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [] });
+      setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [], update_interval_hours: 24 });
       setShowForm(false);
       loadProducts();
     } catch (err) {
@@ -94,14 +126,15 @@ function ProductList() {
       quantity: product.quantity,
       cost_per_unit: product.cost_per_unit || '',
       description: product.description || '',
-      image_data: product.image_data || []
+      image_data: product.image_data || [],
+      update_interval_hours: product.update_interval_hours || 24
     });
     setShowForm(true);
   };
 
   const handleCancel = () => {
     setEditingId(null);
-    setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [] });
+    setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [], update_interval_hours: 24 });
     setShowForm(false);
   };
 
@@ -131,6 +164,21 @@ function ProductList() {
     }
   };
 
+  const handleViewHistory = async (productId) => {
+    try {
+      const history = await getPriceHistory(productId, 10);
+      setPriceHistory(history);
+      setSelectedHistory(productId);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const closeHistory = () => {
+    setSelectedHistory(null);
+    setPriceHistory([]);
+  };
+
   const nextImage = (productId, images) => {
     setCurrentImageIndex(prev => ({
       ...prev,
@@ -145,18 +193,39 @@ function ProductList() {
     }));
   };
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'Never';
+    const date = new Date(dateStr);
+    return date.toLocaleString();
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Products</h1>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
-          >
-            {showForm ? 'Cancel' : (editingId ? 'Cancel Edit' : 'Add Product')}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleRunScheduler}
+              disabled={schedulerRunning}
+              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition disabled:opacity-50"
+            >
+              {schedulerRunning ? 'Updating...' : 'Run Scheduler'}
+            </button>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
+            >
+              {showForm ? 'Cancel' : (editingId ? 'Cancel Edit' : 'Add Product')}
+            </button>
+          </div>
         </div>
+
+        {schedulerStatus && schedulerStatus.products_needing_update > 0 && (
+          <div className="mb-4 p-3 rounded bg-yellow-100 text-yellow-700">
+            {schedulerStatus.products_needing_update} product(s) need price updates
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 rounded bg-red-100 text-red-700">
@@ -216,6 +285,32 @@ function ProductList() {
                     step="0.01"
                     value={formData.cost_per_unit}
                     onChange={(e) => setFormData({ ...formData, cost_per_unit: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                    Update Interval (hours)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.update_interval_hours}
+                    onChange={(e) => setFormData({ ...formData, update_interval_hours: parseInt(e.target.value) || 24 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                    Sell Price (optional)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.sell_price || ''}
+                    onChange={(e) => setFormData({ ...formData, sell_price: e.target.value ? parseFloat(e.target.value) : null })}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -284,6 +379,41 @@ function ProductList() {
           </div>
         )}
 
+        {selectedHistory && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Price History</h2>
+                <button onClick={closeHistory} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {priceHistory.length === 0 ? (
+                  <p className="text-gray-500">No price history available</p>
+                ) : (
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="text-left text-sm text-gray-500">
+                        <th className="pb-2">Price</th>
+                        <th className="pb-2">Seller</th>
+                        <th className="pb-2">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {priceHistory.map((entry) => (
+                        <tr key={entry.id} className="border-t">
+                          <td className="py-2">€{entry.price.toFixed(2)}</td>
+                          <td className="py-2 text-sm">{entry.seller || '-'}</td>
+                          <td className="py-2 text-sm">{formatDate(entry.timestamp)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {products.map((product) => (
             <div key={product.id} className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -315,7 +445,7 @@ function ProductList() {
                   )}
                 </div>
               ) : (
-                <div className="h-48 bg-gray-100 flex items-center justify-center">
+                <div className="h-36 bg-gray-100 flex items-center justify-center">
                   <span className="text-gray-400">No image</span>
                 </div>
               )}
@@ -330,13 +460,30 @@ function ProductList() {
                   </div>
                   <div>
                     <span className="text-gray-500">Cost/Unit:</span>
-                    <span className="ml-1 font-medium">{product.cost_per_unit ? `$${product.cost_per_unit.toFixed(2)}` : '-'}</span>
+                    <span className="ml-1 font-medium">{product.cost_per_unit ? `€${product.cost_per_unit.toFixed(2)}` : '-'}</span>
                   </div>
                   <div className="col-span-2">
                     <span className="text-gray-500">Lowest Price:</span>
                     <span className="ml-1 font-medium text-green-600">
-                      {loadingPrice === product.id ? 'Updating...' : (product.lowest_price ? `$${product.lowest_price.toFixed(2)}` : '-')}
+                      {loadingPrice === product.id ? 'Updating...' : (product.lowest_price ? `€${product.lowest_price.toFixed(2)}` : '-')}
                     </span>
+                    {product.lowest_seller && (
+                      <span className="ml-1 text-xs text-gray-500">({product.lowest_seller})</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Sell Price:</span>
+                    <span className="ml-1 font-medium text-blue-600">
+                      {product.sell_price ? `€${product.sell_price.toFixed(2)}` : '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Interval:</span>
+                    <span className="ml-1 font-medium">{product.update_interval_hours}h</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-gray-500">Last Update:</span>
+                    <span className="ml-1 text-xs">{formatDate(product.last_price_update)}</span>
                   </div>
                 </div>
 
@@ -344,23 +491,29 @@ function ProductList() {
                   <p className="mt-2 text-sm text-gray-600 line-clamp-2">{product.description}</p>
                 )}
 
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4 flex gap-2 flex-wrap">
                   <button
                     onClick={() => handleUpdatePrice(product.id)}
                     disabled={loadingPrice === product.id}
-                    className="flex-1 bg-yellow-500 text-white py-2 px-3 rounded hover:bg-yellow-600 transition disabled:opacity-50"
+                    className="flex-1 bg-yellow-500 text-white py-2 px-3 rounded hover:bg-yellow-600 transition disabled:opacity-50 text-sm"
                   >
                     Update Price
                   </button>
                   <button
+                    onClick={() => handleViewHistory(product.id)}
+                    className="bg-purple-500 text-white py-2 px-3 rounded hover:bg-purple-600 transition text-sm"
+                  >
+                    History
+                  </button>
+                  <button
                     onClick={() => handleEdit(product)}
-                    className="bg-blue-500 text-white py-2 px-3 rounded hover:bg-blue-600 transition"
+                    className="bg-blue-500 text-white py-2 px-3 rounded hover:bg-blue-600 transition text-sm"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(product.id)}
-                    className="bg-red-500 text-white py-2 px-3 rounded hover:bg-red-600 transition"
+                    className="bg-red-500 text-white py-2 px-3 rounded hover:bg-red-600 transition text-sm"
                   >
                     Delete
                   </button>
