@@ -85,30 +85,29 @@ class PricingService:
             return None
 
         try:
-            with open('idealo.html', 'r', encoding='utf-8') as f:
-                html_content = f.read()
-        except FileNotFoundError:
+            result = self.scraper.fetch_and_scrape_sync(product.idealo_link)
+            if not result:
+                session.close()
+                return None
+
+            cheapest_price = result['price']
+            cheapest_seller = result['seller']
+        except Exception as e:
+            print(f"Error fetching {product.idealo_link}: {e}")
             session.close()
             return None
 
-        offers = self.scraper.scrape_offers(html_content)
-        if not offers:
-            session.close()
-            return None
-
-        cheapest = min(offers, key=lambda x: x['price'])
-        
-        product.lowest_price = cheapest['price']
-        product.lowest_seller = cheapest['seller']
+        product.lowest_price = cheapest_price
+        product.lowest_seller = cheapest_seller
         product.last_price_update = datetime.utcnow()
         
         if product.cost_per_unit:
-            product.sell_price = self.calculate_sell_price(cheapest['price'], product.cost_per_unit)
+            product.sell_price = self.calculate_sell_price(cheapest_price, product.cost_per_unit)
         
         history_entry = PriceHistory(
             product_id=product_id,
-            price=cheapest['price'],
-            seller=cheapest['seller'],
+            price=cheapest_price,
+            seller=cheapest_seller,
             timestamp=datetime.utcnow()
         )
         session.add(history_entry)
@@ -118,8 +117,8 @@ class PricingService:
         session.close()
         
         return {
-            'price': cheapest['price'],
-            'seller': cheapest['seller'],
+            'price': cheapest_price,
+            'seller': cheapest_seller,
             'sell_price': product.sell_price
         }
 

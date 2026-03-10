@@ -3,7 +3,7 @@ import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -16,22 +16,13 @@ from src.adapters.scraper import Scraper
 from src.domain.services import PricingService, AuthService
 from src.domain.entities import Product
 
-app = FastAPI(title="Pricing App")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 db = Database()
 scraper = Scraper()
 pricing_service = PricingService(database=db, scraper=scraper)
 auth_service = AuthService(database=db)
 
 scheduler_running = True
+
 
 def scheduler_loop():
     """Background scheduler that runs every minute and checks for updates."""
@@ -41,6 +32,25 @@ def scheduler_loop():
         except Exception as e:
             print(f"Scheduler error: {e}")
         time.sleep(60)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    global scheduler_running
+    scheduler_running = False
+    await scraper.close()
+
+
+app = FastAPI(title="Pricing App", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
 scheduler_thread.start()
@@ -204,7 +214,10 @@ def update_product(product_id: int, product: ProductUpdate):
 def update_product_price(product_id: int):
     result = pricing_service.scrape_and_update_price(product_id)
     if result is None:
-        raise HTTPException(status_code=404, detail="Product not found or no offers available")
+        product = pricing_service.get_product(product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+        raise HTTPException(status_code=503, detail="Could not fetch prices from idealo. The website may be blocking requests or is unavailable.")
     product = pricing_service.get_product(product_id)
     return ProductResponse(
         id=product.id,
