@@ -1,6 +1,7 @@
 from src.domain.entities import Product, User
 from src.ports.interfaces import PricePort, DatabasePort
 import hashlib
+from typing import Optional
 
 
 class PricingService:
@@ -8,9 +9,9 @@ class PricingService:
         self.database = database
         self.scraper = scraper
 
-    def add_product(self, name: str, idealo_link: str) -> Product:
+    def add_product(self, name: str, idealo_link: str, quantity: Optional[int] = 0, cost_per_unit: Optional[float] = None, description: Optional[str] = None) -> Product:
         session = self.database.get_session()
-        product = Product(name=name, idealo_link=idealo_link, lowest_price=None)
+        product = Product(name=name, idealo_link=idealo_link, lowest_price=None, quantity=quantity, cost_per_unit=cost_per_unit, description=description)
         session.add(product)
         session.commit()
         session.refresh(product)

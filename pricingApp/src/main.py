@@ -27,6 +27,9 @@ auth_service = AuthService(database=db)
 class ProductCreate(BaseModel):
     name: str
     idealo_link: str
+    quantity: Optional[int] = 0
+    cost_per_unit: Optional[float] = None
+    description: Optional[str] = None
 
 
 class ProductResponse(BaseModel):
@@ -34,6 +37,9 @@ class ProductResponse(BaseModel):
     name: str
     idealo_link: str
     lowest_price: Optional[float] = None
+    quantity: Optional[int] = 0
+    cost_per_unit: Optional[float] = None
+    description: Optional[str] = None
 
 
 class UserCreate(BaseModel):
@@ -55,13 +61,19 @@ class LoginRequest(BaseModel):
 def add_product(product: ProductCreate):
     new_product = pricing_service.add_product(
         name=product.name,
-        idealo_link=product.idealo_link
+        idealo_link=product.idealo_link,
+        quantity=product.quantity,
+        cost_per_unit=product.cost_per_unit,
+        description=product.description
     )
     return ProductResponse(
         id=new_product.id,
         name=new_product.name,
         idealo_link=new_product.idealo_link,
-        lowest_price=new_product.lowest_price
+        lowest_price=new_product.lowest_price,
+        quantity=new_product.quantity,
+        cost_per_unit=new_product.cost_per_unit,
+        description=new_product.description
     )
 
 
@@ -73,7 +85,10 @@ def get_products():
             id=p.id,
             name=p.name,
             idealo_link=p.idealo_link,
-            lowest_price=p.lowest_price
+            lowest_price=p.lowest_price,
+            quantity=p.quantity,
+            cost_per_unit=p.cost_per_unit,
+            description=p.description
         )
         for p in products
     ]
