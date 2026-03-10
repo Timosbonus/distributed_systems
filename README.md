@@ -4,4 +4,4 @@ Project
 
 Added Users so far:
 
-admin admin
+- admin admin
