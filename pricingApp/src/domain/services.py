@@ -9,16 +9,41 @@ class PricingService:
         self.database = database
         self.scraper = scraper
 
-    def add_product(self, name: str, idealo_link: str, quantity: Optional[int] = 0, cost_per_unit: Optional[float] = None, description: Optional[str] = None) -> Product:
+    def add_product(self, name: str, idealo_link: str, quantity: Optional[int] = 0, cost_per_unit: Optional[float] = None, description: Optional[str] = None, image_data: Optional[str] = None) -> Product:
         session = self.database.get_session()
-        product = Product(name=name, idealo_link=idealo_link, lowest_price=None, quantity=quantity, cost_per_unit=cost_per_unit, description=description)
+        product = Product(name=name, idealo_link=idealo_link, lowest_price=None, quantity=quantity, cost_per_unit=cost_per_unit, description=description, image_data=image_data)
         session.add(product)
         session.commit()
         session.refresh(product)
         session.close()
         return product
 
-    def calculate_lowest_price(self, product_id: int) -> float | None:
+    def update_product(self, product_id: int, name: Optional[str] = None, idealo_link: Optional[str] = None, quantity: Optional[int] = None, cost_per_unit: Optional[float] = None, description: Optional[str] = None, image_data: Optional[str] = None) -> Product | None:
+        session = self.database.get_session()
+        product = session.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            session.close()
+            return None
+        
+        if name is not None:
+            product.name = name
+        if idealo_link is not None:
+            product.idealo_link = idealo_link
+        if quantity is not None:
+            product.quantity = quantity
+        if cost_per_unit is not None:
+            product.cost_per_unit = cost_per_unit
+        if description is not None:
+            product.description = description
+        if image_data is not None:
+            product.image_data = image_data
+        
+        session.commit()
+        session.refresh(product)
+        session.close()
+        return product
+
+    def update_price(self, product_id: int) -> float | None:
         session = self.database.get_session()
         product = session.query(Product).filter(Product.id == product_id).first()
         if not product:
@@ -32,6 +57,18 @@ class PricingService:
         
         session.close()
         return price
+
+    def delete_product(self, product_id: int) -> bool:
+        session = self.database.get_session()
+        product = session.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            session.close()
+            return False
+        
+        session.delete(product)
+        session.commit()
+        session.close()
+        return True
 
     def get_all_products(self) -> list[Product]:
         session = self.database.get_session()

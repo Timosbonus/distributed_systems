@@ -12,9 +12,10 @@ class Product(Base):
     quantity = Column(Integer, nullable=True, default=0)
     cost_per_unit = Column(Float, nullable=True)
     description = Column(String, nullable=True)
+    image_data = Column(String, nullable=True)
 
     def __repr__(self):
-        return f"<Product(id={self.id}, name={self.name}, idealo_link={self.idealo_link}, lowest_price={self.lowest_price}, quantity={self.quantity}, cost_per_unit={self.cost_per_unit}, description={self.description})>"
+        return f"<Product(id={self.id}, name={self.name}, idealo_link={self.idealo_link}, lowest_price={self.lowest_price}, quantity={self.quantity}, cost_per_unit={self.cost_per_unit}, description={self.description}, image_data={self.image_data[:20] if self.image_data else None}...)>"
 
 
 class User(Base):

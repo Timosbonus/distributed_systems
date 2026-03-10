@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
+import json
 
 from src.adapters.database import Database
 from src.adapters.scraper import Scraper
@@ -30,6 +31,16 @@ class ProductCreate(BaseModel):
     quantity: Optional[int] = 0
     cost_per_unit: Optional[float] = None
     description: Optional[str] = None
+    image_data: Optional[List[str]] = None
+
+
+class ProductUpdate(BaseModel):
+    name: Optional[str] = None
+    idealo_link: Optional[str] = None
+    quantity: Optional[int] = None
+    cost_per_unit: Optional[float] = None
+    description: Optional[str] = None
+    image_data: Optional[List[str]] = None
 
 
 class ProductResponse(BaseModel):
@@ -40,6 +51,22 @@ class ProductResponse(BaseModel):
     quantity: Optional[int] = 0
     cost_per_unit: Optional[float] = None
     description: Optional[str] = None
+    image_data: Optional[List[str]] = None
+
+
+def parse_images(images_json: Optional[str]) -> Optional[List[str]]:
+    if not images_json:
+        return None
+    try:
+        return json.loads(images_json)
+    except:
+        return None
+
+
+def serialize_images(images: Optional[List[str]]) -> Optional[str]:
+    if not images:
+        return None
+    return json.dumps(images)
 
 
 class UserCreate(BaseModel):
@@ -64,7 +91,8 @@ def add_product(product: ProductCreate):
         idealo_link=product.idealo_link,
         quantity=product.quantity,
         cost_per_unit=product.cost_per_unit,
-        description=product.description
+        description=product.description,
+        image_data=serialize_images(product.image_data)
     )
     return ProductResponse(
         id=new_product.id,
@@ -73,7 +101,8 @@ def add_product(product: ProductCreate):
         lowest_price=new_product.lowest_price,
         quantity=new_product.quantity,
         cost_per_unit=new_product.cost_per_unit,
-        description=new_product.description
+        description=new_product.description,
+        image_data=parse_images(new_product.image_data)
     )
 
 
@@ -88,10 +117,54 @@ def get_products():
             lowest_price=p.lowest_price,
             quantity=p.quantity,
             cost_per_unit=p.cost_per_unit,
-            description=p.description
+            description=p.description,
+            image_data=parse_images(p.image_data)
         )
         for p in products
     ]
+
+
+@app.put("/products/{product_id}", response_model=ProductResponse)
+def update_product(product_id: int, product: ProductUpdate):
+    updated = pricing_service.update_product(
+        product_id=product_id,
+        name=product.name,
+        idealo_link=product.idealo_link,
+        quantity=product.quantity,
+        cost_per_unit=product.cost_per_unit,
+        description=product.description,
+        image_data=serialize_images(product.image_data)
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return ProductResponse(
+        id=updated.id,
+        name=updated.name,
+        idealo_link=updated.idealo_link,
+        lowest_price=updated.lowest_price,
+        quantity=updated.quantity,
+        cost_per_unit=updated.cost_per_unit,
+        description=updated.description,
+        image_data=parse_images(updated.image_data)
+    )
+
+
+@app.post("/products/{product_id}/update-price", response_model=ProductResponse)
+def update_product_price(product_id: int):
+    price = pricing_service.update_price(product_id)
+    if price is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    product = pricing_service.get_product(product_id)
+    return ProductResponse(
+        id=product.id,
+        name=product.name,
+        idealo_link=product.idealo_link,
+        lowest_price=product.lowest_price,
+        quantity=product.quantity,
+        cost_per_unit=product.cost_per_unit,
+        description=product.description,
+        image_data=parse_images(product.image_data)
+    )
 
 
 @app.get("/products/{product_id}", response_model=ProductResponse)
@@ -103,8 +176,20 @@ def get_product(product_id: int):
         id=product.id,
         name=product.name,
         idealo_link=product.idealo_link,
-        lowest_price=product.lowest_price
+        lowest_price=product.lowest_price,
+        quantity=product.quantity,
+        cost_per_unit=product.cost_per_unit,
+        description=product.description,
+        image_data=parse_images(product.image_data)
     )
+
+
+@app.delete("/products/{product_id}")
+def delete_product(product_id: int):
+    success = pricing_service.delete_product(product_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"message": "Product deleted successfully"}
 
 
 @app.post("/auth/register", response_model=UserResponse)

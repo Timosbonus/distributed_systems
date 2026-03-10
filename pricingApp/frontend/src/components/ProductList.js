@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react';
-import { getProducts, addProduct } from '../api/products';
+import { getProducts, addProduct, updateProduct, updateProductPrice, deleteProduct } from '../api/products';
+
+const MAX_IMAGES = 5;
 
 function ProductList() {
   const [products, setProducts] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
+  const [loadingPrice, setLoadingPrice] = useState(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState({});
   
   const [formData, setFormData] = useState({
     name: '',
     idealo_link: '',
     quantity: 0,
     cost_per_unit: '',
-    description: ''
+    description: '',
+    image_data: []
   });
 
   useEffect(() => {
@@ -27,6 +33,34 @@ function ProductList() {
     }
   };
 
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (formData.image_data.length + files.length > MAX_IMAGES) {
+      setError(`Maximum ${MAX_IMAGES} images allowed`);
+      return;
+    }
+
+    const newImages = [];
+    let loadedCount = 0;
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        newImages.push(reader.result);
+        loadedCount++;
+        if (loadedCount === files.length) {
+          setFormData({ ...formData, image_data: [...formData.image_data, ...newImages] });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeImage = (index) => {
+    const newImages = formData.image_data.filter((_, i) => i !== index);
+    setFormData({ ...formData, image_data: newImages });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -37,8 +71,14 @@ function ProductList() {
         cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : null
       };
       
-      await addProduct(productData);
-      setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '' });
+      if (editingId) {
+        await updateProduct(editingId, productData);
+        setEditingId(null);
+      } else {
+        await addProduct(productData);
+      }
+      
+      setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [] });
       setShowForm(false);
       loadProducts();
     } catch (err) {
@@ -46,16 +86,75 @@ function ProductList() {
     }
   };
 
+  const handleEdit = (product) => {
+    setEditingId(product.id);
+    setFormData({
+      name: product.name,
+      idealo_link: product.idealo_link,
+      quantity: product.quantity,
+      cost_per_unit: product.cost_per_unit || '',
+      description: product.description || '',
+      image_data: product.image_data || []
+    });
+    setShowForm(true);
+  };
+
+  const handleCancel = () => {
+    setEditingId(null);
+    setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [] });
+    setShowForm(false);
+  };
+
+  const handleUpdatePrice = async (productId) => {
+    setLoadingPrice(productId);
+    setError('');
+    try {
+      await updateProductPrice(productId);
+      loadProducts();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingPrice(null);
+    }
+  };
+
+  const handleDelete = async (productId) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) {
+      return;
+    }
+    setError('');
+    try {
+      await deleteProduct(productId);
+      loadProducts();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const nextImage = (productId, images) => {
+    setCurrentImageIndex(prev => ({
+      ...prev,
+      [productId]: ((prev[productId] || 0) + 1) % images.length
+    }));
+  };
+
+  const prevImage = (productId, images) => {
+    setCurrentImageIndex(prev => ({
+      ...prev,
+      [productId]: ((prev[productId] || 0) - 1 + images.length) % images.length
+    }));
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Products</h1>
           <button
             onClick={() => setShowForm(!showForm)}
             className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
           >
-            {showForm ? 'Cancel' : 'Add Product'}
+            {showForm ? 'Cancel' : (editingId ? 'Cancel Edit' : 'Add Product')}
           </button>
         </div>
 
@@ -67,7 +166,7 @@ function ProductList() {
 
         {showForm && (
           <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 className="text-xl font-bold mb-4">Add New Product</h2>
+            <h2 className="text-xl font-bold mb-4">{editingId ? 'Edit Product' : 'Add New Product'}</h2>
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-2 gap-4">
                 <div className="mb-4">
@@ -132,59 +231,148 @@ function ProductList() {
                     rows="2"
                   />
                 </div>
+
+                <div className="mb-4 col-span-2">
+                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                    Product Images (max {MAX_IMAGES})
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageUpload}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={formData.image_data.length >= MAX_IMAGES}
+                  />
+                  {formData.image_data.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {formData.image_data.map((img, idx) => (
+                        <div key={idx} className="relative">
+                          <img src={img} alt={`Preview ${idx + 1}`} className="h-24 w-24 object-contain rounded border border-gray-200" />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(idx)}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <button
-                type="submit"
-                className="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition"
-              >
-                Add Product
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="flex-1 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition"
+                >
+                  {editingId ? 'Update Product' : 'Add Product'}
+                </button>
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className="bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600 transition"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
             </form>
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <table className="min-w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost/Unit</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lowest Price</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {products.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                    <div className="text-sm text-gray-500 truncate max-w-xs">{product.idealo_link}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {product.quantity}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {product.cost_per_unit ? `$${product.cost_per_unit.toFixed(2)}` : '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {product.lowest_price ? `$${product.lowest_price.toFixed(2)}` : '-'}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                    {product.description || '-'}
-                  </td>
-                </tr>
-              ))}
-              {products.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                    No products yet. Click "Add Product" to get started.
-                  </td>
-                </tr>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {products.map((product) => (
+            <div key={product.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+              {product.image_data && product.image_data.length > 0 ? (
+                <div className="relative h-36 bg-gray-100">
+                  <img 
+                    src={product.image_data[currentImageIndex[product.id] || 0]} 
+                    alt={product.name} 
+                    className="w-full h-full object-contain"
+                  />
+                  {product.image_data.length > 1 && (
+                    <>
+                      <button
+                        onClick={() => prevImage(product.id, product.image_data)}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/70"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        onClick={() => nextImage(product.id, product.image_data)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-black/70"
+                      >
+                        ›
+                      </button>
+                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                        {((currentImageIndex[product.id] || 0) + 1)} / {product.image_data.length}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="h-48 bg-gray-100 flex items-center justify-center">
+                  <span className="text-gray-400">No image</span>
+                </div>
               )}
-            </tbody>
-          </table>
+              <div className="p-4">
+                <h3 className="text-lg font-bold text-gray-900">{product.name}</h3>
+                <p className="text-sm text-gray-500 truncate mt-1">{product.idealo_link}</p>
+                
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">Quantity:</span>
+                    <span className="ml-1 font-medium">{product.quantity}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Cost/Unit:</span>
+                    <span className="ml-1 font-medium">{product.cost_per_unit ? `$${product.cost_per_unit.toFixed(2)}` : '-'}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-gray-500">Lowest Price:</span>
+                    <span className="ml-1 font-medium text-green-600">
+                      {loadingPrice === product.id ? 'Updating...' : (product.lowest_price ? `$${product.lowest_price.toFixed(2)}` : '-')}
+                    </span>
+                  </div>
+                </div>
+
+                {product.description && (
+                  <p className="mt-2 text-sm text-gray-600 line-clamp-2">{product.description}</p>
+                )}
+
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => handleUpdatePrice(product.id)}
+                    disabled={loadingPrice === product.id}
+                    className="flex-1 bg-yellow-500 text-white py-2 px-3 rounded hover:bg-yellow-600 transition disabled:opacity-50"
+                  >
+                    Update Price
+                  </button>
+                  <button
+                    onClick={() => handleEdit(product)}
+                    className="bg-blue-500 text-white py-2 px-3 rounded hover:bg-blue-600 transition"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(product.id)}
+                    className="bg-red-500 text-white py-2 px-3 rounded hover:bg-red-600 transition"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {products.length === 0 && (
+            <div className="col-span-full text-center py-12 text-gray-500">
+              No products yet. Click "Add Product" to get started.
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -27,3 +27,48 @@ export const addProduct = async (productData) => {
 
   return data;
 };
+
+export const updateProduct = async (productId, productData) => {
+  const response = await fetch(`${API_URL}/products/${productId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(productData),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.detail || 'Failed to update product');
+  }
+
+  return data;
+};
+
+export const updateProductPrice = async (productId) => {
+  const response = await fetch(`${API_URL}/products/${productId}/update-price`, {
+    method: 'POST',
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.detail || 'Failed to update price');
+  }
+
+  return data;
+};
+
+export const deleteProduct = async (productId) => {
+  const response = await fetch(`${API_URL}/products/${productId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.detail || 'Failed to delete product');
+  }
+
+  return true;
+};
