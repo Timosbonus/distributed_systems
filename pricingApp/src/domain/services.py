@@ -1,9 +1,10 @@
 from src.domain.entities import Product, User, PriceHistory
 from src.ports.interfaces import PricePort, DatabasePort
 
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import datetime, timedelta
 import hashlib
+import json
 
 
 class PricingService:
@@ -26,16 +27,20 @@ class PricingService:
         name: str,
         idealo_link: str,
         quantity: Optional[int] = 0,
-        cost_per_unit: Optional[float] = None
+        cost_per_unit: Optional[float] = None,
+        image_data: Optional[List[str]] = None
     ) -> Product:
 
         session = self.database.get_session()
+
+        image_json = json.dumps(image_data) if image_data else None
 
         product = Product(
             name=name,
             idealo_link=idealo_link,
             quantity=quantity,
-            cost_per_unit=cost_per_unit
+            cost_per_unit=cost_per_unit,
+            image_data=image_json
         )
 
         session.add(product)
@@ -162,6 +167,23 @@ class PricingService:
         session.close()
 
         return product
+
+
+    def delete_product(self, product_id: int) -> bool:
+
+        session = self.database.get_session()
+
+        product = session.query(Product).filter(Product.id == product_id).first()
+
+        if not product:
+            session.close()
+            return False
+
+        session.delete(product)
+        session.commit()
+        session.close()
+
+        return True
 
 
 class AuthService:

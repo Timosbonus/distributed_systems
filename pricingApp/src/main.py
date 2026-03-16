@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-import asyncio
 import json
 
 from src.adapters.database import Database
@@ -17,31 +16,18 @@ scraper = Scraper()
 pricing_service = PricingService(database=db, scraper=scraper)
 auth_service = AuthService(database=db)
 
-scheduler_running = True
-
-
-async def scheduler_loop():
-    while scheduler_running:
-        try:
-            await pricing_service.run_scheduled_updates()
-        except Exception as e:
-            print(f"Scheduler error: {e}")
-
-        await asyncio.sleep(60)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
-    task = asyncio.create_task(scheduler_loop())
-
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(pricing_service.run_scheduled_updates, "interval", minutes=1)
+    scheduler.start()
+    
     yield
-
-    global scheduler_running
-    scheduler_running = False
-
-    task.cancel()
-
+    
+    scheduler.shutdown()
     await scraper.close()
 
 
@@ -49,7 +35,7 @@ app = FastAPI(title="Pricing App", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,6 +47,7 @@ class ProductCreate(BaseModel):
     idealo_link: str
     quantity: Optional[int] = 0
     cost_per_unit: Optional[float] = None
+    image_data: Optional[List[str]] = None
 
 
 class ProductResponse(BaseModel):
@@ -73,6 +60,7 @@ class ProductResponse(BaseModel):
     cost_per_unit: Optional[float] = None
     sell_price: Optional[float] = None
     last_price_update: Optional[str] = None
+    image_data: Optional[List[str]] = None
 
 
 class PriceHistoryResponse(BaseModel):
@@ -98,8 +86,16 @@ def add_product(product: ProductCreate):
         name=product.name,
         idealo_link=product.idealo_link,
         quantity=product.quantity,
-        cost_per_unit=product.cost_per_unit
+        cost_per_unit=product.cost_per_unit,
+        image_data=product.image_data
     )
+
+    image_data_list = []
+    if new_product.image_data:
+        try:
+            image_data_list = json.loads(new_product.image_data)
+        except:
+            image_data_list = []
 
     return ProductResponse(
         id=new_product.id,
@@ -110,7 +106,8 @@ def add_product(product: ProductCreate):
         quantity=new_product.quantity,
         cost_per_unit=new_product.cost_per_unit,
         sell_price=new_product.sell_price,
-        last_price_update=new_product.last_price_update.isoformat() if new_product.last_price_update else None
+        last_price_update=new_product.last_price_update.isoformat() if new_product.last_price_update else None,
+        image_data=image_data_list
     )
 
 
@@ -119,8 +116,16 @@ def get_products():
 
     products = pricing_service.get_all_products()
 
-    return [
-        ProductResponse(
+    result = []
+    for p in products:
+        image_data_list = []
+        if p.image_data:
+            try:
+                image_data_list = json.loads(p.image_data)
+            except:
+                pass
+        
+        result.append(ProductResponse(
             id=p.id,
             name=p.name,
             idealo_link=p.idealo_link,
@@ -129,10 +134,11 @@ def get_products():
             quantity=p.quantity,
             cost_per_unit=p.cost_per_unit,
             sell_price=p.sell_price,
-            last_price_update=p.last_price_update.isoformat() if p.last_price_update else None
-        )
-        for p in products
-    ]
+            last_price_update=p.last_price_update.isoformat() if p.last_price_update else None,
+            image_data=image_data_list
+        ))
+    
+    return result
 
 
 @app.post("/products/{product_id}/update-price", response_model=ProductResponse)
@@ -145,6 +151,13 @@ async def update_price(product_id: int):
 
     product = pricing_service.get_product(product_id)
 
+    image_data_list = []
+    if product.image_data:
+        try:
+            image_data_list = json.loads(product.image_data)
+        except:
+            pass
+
     return ProductResponse(
         id=product.id,
         name=product.name,
@@ -154,7 +167,8 @@ async def update_price(product_id: int):
         quantity=product.quantity,
         cost_per_unit=product.cost_per_unit,
         sell_price=product.sell_price,
-        last_price_update=product.last_price_update.isoformat() if product.last_price_update else None
+        last_price_update=product.last_price_update.isoformat() if product.last_price_update else None,
+        image_data=image_data_list
     )
 
 
@@ -171,6 +185,14 @@ def price_history(product_id: int):
         )
         for h in history
     ]
+
+
+@app.delete("/products/{product_id}")
+def delete_product(product_id: int):
+    deleted = pricing_service.delete_product(product_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"message": "Product deleted successfully"}
 
 
 @app.post("/auth/register")

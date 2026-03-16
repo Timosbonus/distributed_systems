@@ -16,22 +16,27 @@ class Scraper:
     def parse_price(text: str) -> float:
         """
         Convert price string like "€95" to float 95.0
+        Handles various encoding issues with Euro symbol
         """
-        return float(text.replace("€", "").strip())
+        text = text.replace("€", "").replace("â\x82¬", "").strip()
+        return float(text)
 
     async def fetch_and_scrape(self, url: str) -> Dict:
         """
         Fetch the page and return the cheapest offer in the following format:
         {
             "pokemon": "Charmander",
-            "trainer": "Hannes",
+            "seller": "Hannes",
             "price": 90.0,
             "source": url
         }
         """
-        # Using requests synchronously; if you want fully async, we can switch to httpx or aiohttp
-        response = requests.get(url)
-        response.raise_for_status()
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+        except Exception as e:
+            print(f"Failed to fetch {url}: {e}")
+            return None
 
         soup = BeautifulSoup(response.text, "html.parser")
 
@@ -50,7 +55,7 @@ class Scraper:
             if cheapest is None or price < cheapest["price"]:
                 cheapest = {
                     "pokemon": pokemon_name,
-                    "trainer": trainer,
+                    "seller": trainer,
                     "price": price,
                     "source": url
                 }
