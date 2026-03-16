@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 from src.adapters.database import Database
@@ -48,6 +48,10 @@ class ProductCreate(BaseModel):
     quantity: Optional[int] = 0
     cost_per_unit: Optional[float] = None
     image_data: Optional[List[str]] = None
+    description: Optional[str] = None
+    update_interval_hours: Optional[int] = 24
+    minimum_margin: Optional[float] = None
+    sell_price: Optional[float] = None
 
 
 class ProductResponse(BaseModel):
@@ -61,6 +65,9 @@ class ProductResponse(BaseModel):
     sell_price: Optional[float] = None
     last_price_update: Optional[str] = None
     image_data: Optional[List[str]] = None
+    description: Optional[str] = None
+    update_interval_hours: Optional[int] = 24
+    minimum_margin: Optional[float] = None
 
 
 class PriceHistoryResponse(BaseModel):
@@ -87,7 +94,11 @@ def add_product(product: ProductCreate):
         idealo_link=product.idealo_link,
         quantity=product.quantity,
         cost_per_unit=product.cost_per_unit,
-        image_data=product.image_data
+        image_data=product.image_data,
+        description=product.description,
+        update_interval_hours=product.update_interval_hours,
+        minimum_margin=product.minimum_margin,
+        sell_price=product.sell_price
     )
 
     image_data_list = []
@@ -107,7 +118,10 @@ def add_product(product: ProductCreate):
         cost_per_unit=new_product.cost_per_unit,
         sell_price=new_product.sell_price,
         last_price_update=new_product.last_price_update.isoformat() if new_product.last_price_update else None,
-        image_data=image_data_list
+        image_data=image_data_list,
+        description=new_product.description,
+        update_interval_hours=new_product.update_interval_hours,
+        minimum_margin=new_product.minimum_margin
     )
 
 
@@ -135,7 +149,10 @@ def get_products():
             cost_per_unit=p.cost_per_unit,
             sell_price=p.sell_price,
             last_price_update=p.last_price_update.isoformat() if p.last_price_update else None,
-            image_data=image_data_list
+            image_data=image_data_list,
+            description=p.description,
+            update_interval_hours=p.update_interval_hours,
+            minimum_margin=p.minimum_margin
         ))
     
     return result
@@ -168,7 +185,10 @@ async def update_price(product_id: int):
         cost_per_unit=product.cost_per_unit,
         sell_price=product.sell_price,
         last_price_update=product.last_price_update.isoformat() if product.last_price_update else None,
-        image_data=image_data_list
+        image_data=image_data_list,
+        description=product.description,
+        update_interval_hours=product.update_interval_hours,
+        minimum_margin=product.minimum_margin
     )
 
 
@@ -193,6 +213,89 @@ def delete_product(product_id: int):
     if not deleted:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted successfully"}
+
+
+@app.put("/products/{product_id}", response_model=ProductResponse)
+def update_product(product_id: int, product: ProductCreate):
+    updated = pricing_service.update_product(
+        product_id=product_id,
+        name=product.name,
+        idealo_link=product.idealo_link,
+        quantity=product.quantity,
+        cost_per_unit=product.cost_per_unit,
+        description=product.description,
+        update_interval_hours=product.update_interval_hours,
+        minimum_margin=product.minimum_margin,
+        image_data=product.image_data,
+        sell_price=product.sell_price
+    )
+    
+    if not updated:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    image_data_list = []
+    if updated.image_data:
+        try:
+            image_data_list = json.loads(updated.image_data)
+        except:
+            pass
+
+    return ProductResponse(
+        id=updated.id,
+        name=updated.name,
+        idealo_link=updated.idealo_link,
+        lowest_price=updated.lowest_price,
+        lowest_seller=updated.lowest_seller,
+        quantity=updated.quantity,
+        cost_per_unit=updated.cost_per_unit,
+        sell_price=updated.sell_price,
+        last_price_update=updated.last_price_update.isoformat() if updated.last_price_update else None,
+        image_data=image_data_list,
+        description=updated.description,
+        update_interval_hours=updated.update_interval_hours,
+        minimum_margin=updated.minimum_margin
+    )
+
+
+@app.get("/scheduler/status")
+def get_scheduler_status():
+    products = pricing_service.get_all_products()
+    now = datetime.utcnow()
+    needs_update = 0
+    
+    for p in products:
+        if not p.last_price_update:
+            needs_update += 1
+        else:
+            interval = timedelta(hours=p.update_interval_hours or 24)
+            if now - p.last_price_update >= interval:
+                needs_update += 1
+    
+    return {
+        "running": True,
+        "products_needing_update": needs_update,
+        "total_products": len(products)
+    }
+
+
+@app.post("/scheduler/run")
+async def run_scheduler():
+    products = pricing_service.get_all_products()
+    updated = []
+    failed = []
+    
+    for p in products:
+        try:
+            result = await pricing_service.scrape_and_update_price(p.id)
+            if result:
+                updated.append(p.id)
+            else:
+                failed.append(p.id)
+        except Exception as e:
+            print(f"Failed to update product {p.id}: {e}")
+            failed.append(p.id)
+    
+    return {"updated": updated, "failed": failed}
 
 
 @app.post("/auth/register")

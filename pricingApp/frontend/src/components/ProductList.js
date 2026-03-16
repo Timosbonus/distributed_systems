@@ -22,7 +22,9 @@ function ProductList() {
     cost_per_unit: '',
     description: '',
     image_data: [],
-    update_interval_hours: 24
+    update_interval_hours: 24,
+    minimum_margin: '',
+    sell_price: ''
   });
 
   useEffect(() => {
@@ -99,8 +101,15 @@ function ProductList() {
 
     try {
       const productData = {
-        ...formData,
-        cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : null
+        name: formData.name,
+        idealo_link: formData.idealo_link,
+        quantity: formData.quantity || 0,
+        description: formData.description || null,
+        image_data: formData.image_data || null,
+        update_interval_hours: formData.update_interval_hours || 24,
+        cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : null,
+        minimum_margin: formData.minimum_margin ? parseFloat(formData.minimum_margin) : null,
+        sell_price: formData.sell_price ? parseFloat(formData.sell_price) : null
       };
       
       if (editingId) {
@@ -110,7 +119,7 @@ function ProductList() {
         await addProduct(productData);
       }
       
-      setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [], update_interval_hours: 24 });
+      setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [], update_interval_hours: 24, minimum_margin: '', sell_price: '' });
       setShowForm(false);
       loadProducts();
     } catch (err) {
@@ -127,14 +136,16 @@ function ProductList() {
       cost_per_unit: product.cost_per_unit || '',
       description: product.description || '',
       image_data: product.image_data || [],
-      update_interval_hours: product.update_interval_hours || 24
+      update_interval_hours: product.update_interval_hours || 24,
+      minimum_margin: product.minimum_margin || '',
+      sell_price: product.sell_price || ''
     });
     setShowForm(true);
   };
 
   const handleCancel = () => {
     setEditingId(null);
-    setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [], update_interval_hours: 24 });
+    setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [], update_interval_hours: 24, minimum_margin: '', sell_price: '' });
     setShowForm(false);
   };
 
@@ -299,6 +310,21 @@ function ProductList() {
                     value={formData.update_interval_hours}
                     onChange={(e) => setFormData({ ...formData, update_interval_hours: parseInt(e.target.value) || 24 })}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                    Minimum Margin (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={formData.minimum_margin || ''}
+                    onChange={(e) => setFormData({ ...formData, minimum_margin: e.target.value ? parseFloat(e.target.value) : null })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. 10"
                   />
                 </div>
 
@@ -481,6 +507,12 @@ function ProductList() {
                     <span className="text-gray-500">Interval:</span>
                     <span className="ml-1 font-medium">{product.update_interval_hours}h</span>
                   </div>
+                  {product.minimum_margin !== null && product.minimum_margin !== undefined && (
+                    <div>
+                      <span className="text-gray-500">Min Margin:</span>
+                      <span className="ml-1 font-medium">{product.minimum_margin}%</span>
+                    </div>
+                  )}
                   <div className="col-span-2">
                     <span className="text-gray-500">Last Update:</span>
                     <span className="ml-1 text-xs">{formatDate(product.last_price_update)}</span>

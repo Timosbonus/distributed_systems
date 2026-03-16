@@ -14,10 +14,22 @@ class PricingService:
         self.scraper = scraper
 
 
-    def calculate_sell_price(self, lowest_price: float, cost: float) -> float:
+    def calculate_sell_price(self, lowest_price: float, cost: float, minimum_margin: Optional[float] = None) -> float:
+        if lowest_price is None:
+            if cost and minimum_margin:
+                return round(cost * (1 + minimum_margin / 100), 2)
+            elif cost:
+                return round(cost * 1.01, 2)
+            return None
 
         if lowest_price <= cost:
+            if minimum_margin:
+                return round(cost * (1 + minimum_margin / 100), 2)
             return round(cost * 1.01, 2)
+
+        margin = lowest_price - cost
+        if minimum_margin and margin < (lowest_price * minimum_margin / 100):
+            return round(lowest_price - (lowest_price * minimum_margin / 100) + 0.01, 2)
 
         return round(lowest_price - 0.01, 2)
 
@@ -28,7 +40,11 @@ class PricingService:
         idealo_link: str,
         quantity: Optional[int] = 0,
         cost_per_unit: Optional[float] = None,
-        image_data: Optional[List[str]] = None
+        image_data: Optional[List[str]] = None,
+        description: Optional[str] = None,
+        update_interval_hours: Optional[int] = 24,
+        minimum_margin: Optional[float] = None,
+        sell_price: Optional[float] = None
     ) -> Product:
 
         session = self.database.get_session()
@@ -40,7 +56,11 @@ class PricingService:
             idealo_link=idealo_link,
             quantity=quantity,
             cost_per_unit=cost_per_unit,
-            image_data=image_json
+            image_data=image_json,
+            description=description,
+            update_interval_hours=update_interval_hours,
+            minimum_margin=minimum_margin,
+            sell_price=sell_price
         )
 
         session.add(product)
@@ -64,6 +84,12 @@ class PricingService:
         result = await self.scraper.fetch_and_scrape(product.idealo_link)
 
         if not result:
+            if product.cost_per_unit is not None and product.minimum_margin is not None:
+                product.sell_price = round(product.cost_per_unit * (1 + product.minimum_margin / 100), 2)
+                product.last_price_update = datetime.utcnow()
+                session.commit()
+                session.close()
+                return None
             session.close()
             return None
 
@@ -75,7 +101,7 @@ class PricingService:
         product.last_price_update = datetime.utcnow()
 
         if product.cost_per_unit is not None:
-            product.sell_price = self.calculate_sell_price(price, product.cost_per_unit)
+            product.sell_price = self.calculate_sell_price(price, product.cost_per_unit, product.minimum_margin)
 
         history = PriceHistory(
             product_id=product_id,
@@ -184,6 +210,49 @@ class PricingService:
         session.close()
 
         return True
+
+
+    def update_product(self, product_id: int, name: str = None, idealo_link: str = None, quantity: int = None, cost_per_unit: float = None, description: str = None, update_interval_hours: int = None, minimum_margin: float = None, image_data: List[str] = None, sell_price: float = None):
+        session = self.database.get_session()
+
+        product = session.query(Product).filter(Product.id == product_id).first()
+
+        if not product:
+            session.close()
+            return None
+
+        if name is not None:
+            product.name = name
+        if idealo_link is not None:
+            product.idealo_link = idealo_link
+        if quantity is not None:
+            product.quantity = quantity
+        if cost_per_unit is not None:
+            product.cost_per_unit = cost_per_unit
+        if description is not None:
+            product.description = description
+        if update_interval_hours is not None:
+            product.update_interval_hours = update_interval_hours
+        if minimum_margin is not None:
+            product.minimum_margin = minimum_margin
+        if image_data is not None:
+            product.image_data = json.dumps(image_data)
+        if sell_price is not None:
+            product.sell_price = sell_price
+            product.update_interval_hours = update_interval_hours
+        if minimum_margin is not None:
+            product.minimum_margin = minimum_margin
+        if image_data is not None:
+            product.image_data = json.dumps(image_data)
+
+        if product.cost_per_unit is not None and product.lowest_price is not None:
+            product.sell_price = self.calculate_sell_price(product.lowest_price, product.cost_per_unit, product.minimum_margin)
+
+        session.commit()
+        session.refresh(product)
+        session.close()
+
+        return product
 
 
 class AuthService:
