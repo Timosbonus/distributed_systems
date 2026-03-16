@@ -24,7 +24,7 @@ function ProductList() {
     image_data: [],
     update_interval_hours: 24,
     minimum_margin: '',
-    sell_price: ''
+    manual_sell_price: ''
   });
 
   useEffect(() => {
@@ -109,7 +109,7 @@ function ProductList() {
         update_interval_hours: formData.update_interval_hours || 24,
         cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : null,
         minimum_margin: formData.minimum_margin ? parseFloat(formData.minimum_margin) : null,
-        sell_price: formData.sell_price ? parseFloat(formData.sell_price) : null
+        manual_sell_price: formData.manual_sell_price ? parseFloat(formData.manual_sell_price) : null
       };
       
       if (editingId) {
@@ -119,7 +119,7 @@ function ProductList() {
         await addProduct(productData);
       }
       
-      setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [], update_interval_hours: 24, minimum_margin: '', sell_price: '' });
+      setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [], update_interval_hours: 24, minimum_margin: '', manual_sell_price: '' });
       setShowForm(false);
       loadProducts();
     } catch (err) {
@@ -138,14 +138,14 @@ function ProductList() {
       image_data: product.image_data || [],
       update_interval_hours: product.update_interval_hours || 24,
       minimum_margin: product.minimum_margin || '',
-      sell_price: product.sell_price || ''
+      manual_sell_price: product.manual_sell_price || ''
     });
     setShowForm(true);
   };
 
   const handleCancel = () => {
     setEditingId(null);
-    setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [], update_interval_hours: 24, minimum_margin: '', sell_price: '' });
+    setFormData({ name: '', idealo_link: '', quantity: 0, cost_per_unit: '', description: '', image_data: [], update_interval_hours: 24, minimum_margin: '', manual_sell_price: '' });
     setShowForm(false);
   };
 
@@ -330,15 +330,27 @@ function ProductList() {
 
                 <div className="mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2">
-                    Sell Price (optional)
+                    Manual Sell Price (overrides auto-calculated)
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.sell_price || ''}
-                    onChange={(e) => setFormData({ ...formData, sell_price: e.target.value ? parseFloat(e.target.value) : null })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.manual_sell_price || ''}
+                      onChange={(e) => setFormData({ ...formData, manual_sell_price: e.target.value ? parseFloat(e.target.value) : null })}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Leave empty for auto-calculated"
+                    />
+                    {formData.manual_sell_price && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, manual_sell_price: null })}
+                        className="px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mb-4 col-span-2">
@@ -502,6 +514,9 @@ function ProductList() {
                     <span className="ml-1 font-medium text-blue-600">
                       {product.sell_price ? `€${product.sell_price.toFixed(2)}` : '-'}
                     </span>
+                    {product.manual_sell_price && (
+                      <span className="ml-1 text-xs text-green-600">(manual)</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-gray-500">Interval:</span>

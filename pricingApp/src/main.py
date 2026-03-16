@@ -51,7 +51,7 @@ class ProductCreate(BaseModel):
     description: Optional[str] = None
     update_interval_hours: Optional[int] = 24
     minimum_margin: Optional[float] = None
-    sell_price: Optional[float] = None
+    manual_sell_price: Optional[float] = None
 
 
 class ProductResponse(BaseModel):
@@ -63,6 +63,7 @@ class ProductResponse(BaseModel):
     quantity: Optional[int] = 0
     cost_per_unit: Optional[float] = None
     sell_price: Optional[float] = None
+    manual_sell_price: Optional[float] = None
     last_price_update: Optional[str] = None
     image_data: Optional[List[str]] = None
     description: Optional[str] = None
@@ -98,7 +99,7 @@ def add_product(product: ProductCreate):
         description=product.description,
         update_interval_hours=product.update_interval_hours,
         minimum_margin=product.minimum_margin,
-        sell_price=product.sell_price
+        manual_sell_price=product.manual_sell_price
     )
 
     image_data_list = []
@@ -117,6 +118,7 @@ def add_product(product: ProductCreate):
         quantity=new_product.quantity,
         cost_per_unit=new_product.cost_per_unit,
         sell_price=new_product.sell_price,
+        manual_sell_price=new_product.manual_sell_price,
         last_price_update=new_product.last_price_update.isoformat() if new_product.last_price_update else None,
         image_data=image_data_list,
         description=new_product.description,
@@ -148,6 +150,7 @@ def get_products():
             quantity=p.quantity,
             cost_per_unit=p.cost_per_unit,
             sell_price=p.sell_price,
+            manual_sell_price=p.manual_sell_price,
             last_price_update=p.last_price_update.isoformat() if p.last_price_update else None,
             image_data=image_data_list,
             description=p.description,
@@ -184,6 +187,7 @@ async def update_price(product_id: int):
         quantity=product.quantity,
         cost_per_unit=product.cost_per_unit,
         sell_price=product.sell_price,
+        manual_sell_price=product.manual_sell_price,
         last_price_update=product.last_price_update.isoformat() if product.last_price_update else None,
         image_data=image_data_list,
         description=product.description,
@@ -227,7 +231,7 @@ def update_product(product_id: int, product: ProductCreate):
         update_interval_hours=product.update_interval_hours,
         minimum_margin=product.minimum_margin,
         image_data=product.image_data,
-        sell_price=product.sell_price
+        manual_sell_price=product.manual_sell_price
     )
     
     if not updated:
@@ -249,6 +253,7 @@ def update_product(product_id: int, product: ProductCreate):
         quantity=updated.quantity,
         cost_per_unit=updated.cost_per_unit,
         sell_price=updated.sell_price,
+        manual_sell_price=updated.manual_sell_price,
         last_price_update=updated.last_price_update.isoformat() if updated.last_price_update else None,
         image_data=image_data_list,
         description=updated.description,
