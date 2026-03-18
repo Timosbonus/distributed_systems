@@ -239,8 +239,7 @@ class PricingService:
             product.minimum_margin = minimum_margin
         if image_data is not None:
             product.image_data = json.dumps(image_data)
-        if manual_sell_price is not None:
-            product.manual_sell_price = manual_sell_price
+        product.manual_sell_price = manual_sell_price
 
         if product.manual_sell_price is not None:
             product.sell_price = product.manual_sell_price
