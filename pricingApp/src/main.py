@@ -72,6 +72,7 @@ class ProductResponse(BaseModel):
 
 
 class PriceHistoryResponse(BaseModel):
+    id: int
     price: float
     seller: Optional[str]
     timestamp: str
@@ -203,6 +204,7 @@ def price_history(product_id: int):
 
     return [
         PriceHistoryResponse(
+            id=h.id,
             price=h.price,
             seller=h.seller,
             timestamp=h.timestamp.isoformat()
