@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 Base = declarative_base()
@@ -15,3 +15,8 @@ class Database:
 
     def create_all(self):
         Base.metadata.create_all(bind=self.engine)
+
+    def reset_sequences(self):
+        with self.engine.connect() as conn:
+            conn.execute(text("DELETE FROM sqlite_sequence"))
+            conn.commit()
