@@ -15,7 +15,7 @@ cd ../..
 
 echo "[3/3] Starting sampleShop on port 8080..."
 cd sampleShop
-python3 -m http.server 8080 &
+python3 -m http.server 81 &
 cd ..
 
 echo ""
