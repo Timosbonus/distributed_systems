@@ -23,7 +23,7 @@ function renderProducts() {
   const gridEl = document.getElementById('products-grid');
   
   if (products.length === 0) {
-    gridEl.innerHTML = '<div class="error-message">No products available. Please add products in the admin panel.</div>';
+    gridEl.innerHTML = '<div class="error-message">No Pokemon available. Check back later!</div>';
     return;
   }
   
@@ -101,7 +101,7 @@ function addToCart(productId) {
   }
   
   updateCartUI();
-  showNotification(`${product.name} added to cart!`, 'success');
+  showNotification(`${product.name} added to your team!`, 'success');
 }
 
 function removeFromCart(productId) {
@@ -133,7 +133,7 @@ function updateCartUI() {
   const cartItemsEl = document.getElementById('cart-items');
   
   if (cart.length === 0) {
-    cartItemsEl.innerHTML = '<div class="empty-cart">Your cart is empty</div>';
+    cartItemsEl.innerHTML = '<div class="empty-cart">Your cart is empty - start catching some Pokemon!</div>';
   } else {
     cartItemsEl.innerHTML = cart.map(item => `
       <div class="cart-item">
