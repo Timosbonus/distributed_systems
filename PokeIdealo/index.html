@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PokeMart - Your Pokemon Store</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>PokeMart 🐾</h1>
+      <nav>
+        <button id="cart-btn" class="cart-button">
+          🛒 Cart (<span id="cart-count">0</span>)
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="products-section">
+      <h2>Available Products</h2>
+      <div id="products-loading" class="loading">Loading products...</div>
+      <div id="products-grid" class="products-grid"></div>
+    </section>
+
+    <section id="cart-modal" class="cart-modal hidden">
+      <div class="cart-content">
+        <div class="cart-header">
+          <h2>Shopping Cart</h2>
+          <button id="close-cart" class="close-btn">&times;</button>
+        </div>
+        <div id="cart-items" class="cart-items"></div>
+        <div class="cart-footer">
+          <div class="cart-total">
+            Total: €<span id="cart-total">0.00</span>
+          </div>
+          <button id="checkout-btn" class="checkout-btn">Checkout</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="notification" class="notification hidden"></div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
