@@ -4,12 +4,12 @@ cd "$(dirname "$0")"
 echo "=== Starting all services ==="
 
 echo "[1/4] Starting FastAPI backend on port 8000..."
-cd my_fastapi_project
+cd adminPanel
 python3 -m uvicorn app.main:app --reload --port 8000 &
 cd ..
 
 echo "[2/4] Starting React frontend on port 3000..."
-cd my_fastapi_project/frontend
+cd adminPanel/frontend
 npx react-scripts start &
 cd ../..
 
