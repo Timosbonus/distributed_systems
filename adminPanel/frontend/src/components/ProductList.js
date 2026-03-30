@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { getProducts, addProduct, updateProduct, updateProductPrice, deleteProduct, runScheduler, getSchedulerStatus, getPriceHistory } from '../api/products';
+import { getProducts, addProduct, updateProduct, deleteProduct, getPriceHistory } from '../api/products';
 import ProductCard from './ProductCard';
 import ProductFormModal from './ProductFormModal';
 import PriceHistory from './PriceHistory';
+import ExcludedSellers from './ExcludedSellers';
+import AuditLog from './AuditLog';
 
 const initialFormData = {
   name: '',
@@ -11,7 +13,6 @@ const initialFormData = {
   cost_per_unit: '',
   description: '',
   image_data: [],
-  update_interval_hours: 24,
   minimum_margin: '',
   manual_sell_price: ''
 };
@@ -21,20 +22,18 @@ function ProductList() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
-  const [loadingPrice, setLoadingPrice] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState({});
-  const [schedulerRunning, setSchedulerRunning] = useState(false);
-  const [schedulerStatus, setSchedulerStatus] = useState(null);
   const [selectedHistory, setSelectedHistory] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
   const [historyProductName, setHistoryProductName] = useState('');
+  const [showExcludedSellers, setShowExcludedSellers] = useState(false);
+  const [selectedAuditProduct, setSelectedAuditProduct] = useState(null);
   
   const [formData, setFormData] = useState(initialFormData);
 
   useEffect(() => {
     loadProducts();
-    loadSchedulerStatus();
-    const interval = setInterval(loadSchedulerStatus, 30000);
+    const interval = setInterval(loadProducts, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -47,33 +46,14 @@ function ProductList() {
     }
   };
 
-  const loadSchedulerStatus = async () => {
-    try {
-      const status = await getSchedulerStatus();
-      setSchedulerStatus(status);
-    } catch (err) {
-      console.error('Failed to load scheduler status');
-    }
-  };
-
-  const handleRunScheduler = async () => {
-    setSchedulerRunning(true);
-    setError('');
-    try {
-      const result = await runScheduler();
-      loadProducts();
-      loadSchedulerStatus();
-      alert(`Updated ${result.updated.length} products${result.failed.length > 0 ? `, ${result.failed.length} failed` : ''}`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSchedulerRunning(false);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!formData.name || !formData.idealo_link || !formData.cost_per_unit || !formData.minimum_margin) {
+      setError('Name, link, cost per unit, and minimum margin are required');
+      return;
+    }
 
     try {
       const productData = {
@@ -82,9 +62,8 @@ function ProductList() {
         quantity: formData.quantity || 0,
         description: formData.description || null,
         image_data: formData.image_data || null,
-        update_interval_hours: formData.update_interval_hours || 24,
-        cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : null,
-        minimum_margin: formData.minimum_margin ? parseFloat(formData.minimum_margin) : null,
+        cost_per_unit: parseFloat(formData.cost_per_unit),
+        minimum_margin: parseFloat(formData.minimum_margin),
         manual_sell_price: formData.manual_sell_price ? parseFloat(formData.manual_sell_price) : null
       };
       
@@ -112,7 +91,6 @@ function ProductList() {
       cost_per_unit: product.cost_per_unit || '',
       description: product.description || '',
       image_data: product.image_data || [],
-      update_interval_hours: product.update_interval_hours || 24,
       minimum_margin: product.minimum_margin || '',
       manual_sell_price: product.manual_sell_price || ''
     });
@@ -123,19 +101,6 @@ function ProductList() {
     setEditingId(null);
     setFormData(initialFormData);
     setShowForm(false);
-  };
-
-  const handleUpdatePrice = async (productId) => {
-    setLoadingPrice(productId);
-    setError('');
-    try {
-      await updateProductPrice(productId);
-      loadProducts();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoadingPrice(null);
-    }
   };
 
   const handleDelete = async (productId) => {
@@ -168,6 +133,10 @@ function ProductList() {
     setHistoryProductName('');
   };
 
+  const handleViewAudit = (productId) => {
+    setSelectedAuditProduct(productId);
+  };
+
   const nextImage = (productId, images) => {
     setCurrentImageIndex(prev => ({
       ...prev,
@@ -189,11 +158,10 @@ function ProductList() {
           <h1 className="text-3xl font-bold">Products</h1>
           <div className="flex gap-2">
             <button
-              onClick={handleRunScheduler}
-              disabled={schedulerRunning}
-              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition disabled:opacity-50"
+              onClick={() => setShowExcludedSellers(true)}
+              className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 transition"
             >
-              {schedulerRunning ? 'Updating...' : 'Run Scheduler'}
+              Excluded Sellers
             </button>
             <button
               onClick={() => setShowForm(!showForm)}
@@ -203,12 +171,6 @@ function ProductList() {
             </button>
           </div>
         </div>
-
-        {schedulerStatus && schedulerStatus.products_needing_update > 0 && (
-          <div className="mb-4 p-3 rounded bg-yellow-100 text-yellow-700">
-            {schedulerStatus.products_needing_update} product(s) need price updates
-          </div>
-        )}
 
         {error && (
           <div className="mb-4 p-3 rounded bg-red-100 text-red-700">
@@ -233,6 +195,18 @@ function ProductList() {
           priceHistory={priceHistory}
         />
 
+        <ExcludedSellers
+          isOpen={showExcludedSellers}
+          onClose={() => setShowExcludedSellers(false)}
+          onRefresh={loadProducts}
+        />
+
+        <AuditLog
+          isOpen={!!selectedAuditProduct}
+          onClose={() => setSelectedAuditProduct(null)}
+          productId={selectedAuditProduct}
+        />
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {products.map((product) => (
             <ProductCard
@@ -241,11 +215,10 @@ function ProductList() {
               currentImageIndex={currentImageIndex[product.id]}
               onPrevImage={prevImage}
               onNextImage={nextImage}
-              onUpdatePrice={handleUpdatePrice}
               onViewHistory={handleViewHistory}
+              onViewAudit={handleViewAudit}
               onEdit={handleEdit}
               onDelete={handleDelete}
-              loadingPrice={loadingPrice}
             />
           ))}
           {products.length === 0 && (

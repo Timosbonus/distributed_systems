@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
 
 from app.dependencies import get_db
 from app.services.product_service import ProductService
@@ -13,20 +12,10 @@ router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 def get_scheduler_status(db: Session = Depends(get_db)):
     service = ProductService(db)
     products = service.get_all_products()
-    now = datetime.utcnow()
-    needs_update = 0
-
-    for p in products:
-        if not p.last_price_update:
-            needs_update += 1
-        else:
-            interval = timedelta(hours=p.update_interval_hours or 24)
-            if now - p.last_price_update >= interval:
-                needs_update += 1
 
     return {
         "running": True,
-        "products_needing_update": needs_update,
+        "products_needing_update": len(products),
         "total_products": len(products)
     }
 

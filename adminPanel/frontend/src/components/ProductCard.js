@@ -1,4 +1,4 @@
-function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onUpdatePrice, onViewHistory, onEdit, onDelete, loadingPrice }) {
+function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onViewHistory, onViewAudit, onEdit, onDelete }) {
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Never';
     const date = new Date(dateStr);
@@ -6,7 +6,7 @@ function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onU
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
       {product.image_data && product.image_data.length > 0 ? (
         <div className="relative h-36 bg-gray-100">
           <img 
@@ -55,7 +55,7 @@ function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onU
           <div className="col-span-2">
             <span className="text-gray-500">Lowest Price:</span>
             <span className="ml-1 font-medium text-green-600">
-              {loadingPrice === product.id ? 'Updating...' : (product.lowest_price ? `€${product.lowest_price.toFixed(2)}` : '-')}
+              {product.lowest_price ? `€${product.lowest_price.toFixed(2)}` : '-'}
             </span>
             {product.lowest_seller && (
               <span className="ml-1 text-xs text-gray-500">({product.lowest_seller})</span>
@@ -70,10 +70,6 @@ function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onU
               <span className="ml-1 text-xs text-green-600">(manual)</span>
             )}
           </div>
-          <div>
-            <span className="text-gray-500">Interval:</span>
-            <span className="ml-1 font-medium">{product.update_interval_hours}h</span>
-          </div>
           {product.minimum_margin !== null && product.minimum_margin !== undefined && (
             <div>
               <span className="text-gray-500">Min Margin:</span>
@@ -87,32 +83,31 @@ function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onU
         </div>
 
         {product.description && (
-          <p className="mt-2 text-sm text-gray-600 line-clamp-2">{product.description}</p>
+          <p className="mt-2 text-sm text-gray-600 line-clamp-2 flex-grow">{product.description}</p>
         )}
 
-        <div className="mt-4 flex gap-2 flex-wrap">
-          <button
-            onClick={() => onUpdatePrice(product.id)}
-            disabled={loadingPrice === product.id}
-            className="flex-1 bg-yellow-500 text-white py-2 px-3 rounded hover:bg-yellow-600 transition disabled:opacity-50 text-sm"
-          >
-            Update Price
-          </button>
+        <div className="mt-auto pt-4 flex gap-1 justify-between">
           <button
             onClick={() => onViewHistory(product)}
-            className="bg-purple-500 text-white py-2 px-3 rounded hover:bg-purple-600 transition text-sm"
+            className="bg-purple-500 text-white py-2 px-2 rounded hover:bg-purple-600 transition text-xs font-medium flex-1"
           >
             History
           </button>
           <button
+            onClick={() => onViewAudit(product.id)}
+            className="bg-gray-500 text-white py-2 px-2 rounded hover:bg-gray-600 transition text-xs font-medium"
+          >
+            Audit
+          </button>
+          <button
             onClick={() => onEdit(product)}
-            className="bg-blue-500 text-white py-2 px-3 rounded hover:bg-blue-600 transition text-sm"
+            className="bg-blue-500 text-white py-2 px-2 rounded hover:bg-blue-600 transition text-xs font-medium"
           >
             Edit
           </button>
           <button
             onClick={() => onDelete(product.id)}
-            className="bg-red-500 text-white py-2 px-3 rounded hover:bg-red-600 transition text-sm"
+            className="bg-red-500 text-white py-2 px-2 rounded hover:bg-red-600 transition text-xs font-medium"
           >
             Delete
           </button>

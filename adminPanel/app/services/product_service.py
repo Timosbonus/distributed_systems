@@ -4,6 +4,8 @@ import json
 
 from app.models.product import Product
 from app.models.price_history import PriceHistory
+from app.models.excluded_seller import ExcludedSeller
+from app.models.audit_log import AuditLog
 from app.services.scraper import Scraper
 
 
@@ -20,20 +22,19 @@ class ProductService:
                 return round(cost * 1.01, 2)
             return None
 
-        if lowest_price <= cost:
-            if minimum_margin:
-                return round(cost * (1 + minimum_margin / 100), 2)
-            return round(cost * 1.01, 2)
+        if cost is None:
+            return round(lowest_price - 0.01, 2)
 
-        margin = lowest_price - cost
-        if minimum_margin and margin < (lowest_price * minimum_margin / 100):
-            return round(lowest_price - (lowest_price * minimum_margin / 100) + 0.01, 2)
+        floor_price = round(cost * (1 + minimum_margin / 100), 2) if minimum_margin else round(cost * 1.01, 2)
+
+        if floor_price >= lowest_price:
+            return floor_price
 
         return round(lowest_price - 0.01, 2)
 
     def add_product(self, name: str, idealo_link: str, quantity: int = 0, cost_per_unit: Optional[float] = None,
                     image_data: Optional[List[str]] = None, description: Optional[str] = None,
-                    update_interval_hours: int = 24, minimum_margin: Optional[float] = None,
+                    minimum_margin: Optional[float] = None,
                     manual_sell_price: Optional[float] = None) -> Product:
         product = Product(
             name=name,
@@ -42,7 +43,6 @@ class ProductService:
             cost_per_unit=cost_per_unit,
             image_data=json.dumps(image_data) if image_data else None,
             description=description,
-            update_interval_hours=update_interval_hours,
             minimum_margin=minimum_margin,
             manual_sell_price=manual_sell_price
         )
@@ -61,13 +61,17 @@ class ProductService:
         product = self.get_product(product_id)
         if not product:
             return False
+        
+        self.db.query(PriceHistory).filter(PriceHistory.product_id == product_id).delete()
+        self.db.query(AuditLog).filter(AuditLog.product_id == product_id).delete()
+        
         self.db.delete(product)
         self.db.commit()
         return True
 
     def update_product(self, product_id: int, name: Optional[str] = None, idealo_link: Optional[str] = None,
                        quantity: Optional[int] = None, cost_per_unit: Optional[float] = None,
-                       description: Optional[str] = None, update_interval_hours: Optional[int] = None,
+                       description: Optional[str] = None,
                        minimum_margin: Optional[float] = None, image_data: Optional[List[str]] = None,
                        manual_sell_price: Optional[float] = None) -> Optional[Product]:
         product = self.get_product(product_id)
@@ -84,8 +88,6 @@ class ProductService:
             product.cost_per_unit = cost_per_unit
         if description is not None:
             product.description = description
-        if update_interval_hours is not None:
-            product.update_interval_hours = update_interval_hours
         if minimum_margin is not None:
             product.minimum_margin = minimum_margin
         if image_data is not None:
@@ -106,9 +108,16 @@ class ProductService:
         if not product:
             return None
 
-        result = await self.scraper.fetch_and_scrape(product.idealo_link)
+        excluded_sellers = self.get_excluded_sellers()
+        result = await self.scraper.fetch_and_scrape(product.idealo_link, excluded_sellers=excluded_sellers)
 
         if not result:
+            if excluded_sellers:
+                self.log_audit(
+                    product_id, "scrape_failed",
+                    product.sell_price, product.sell_price,
+                    f"Price update skipped - all sellers excluded: {', '.join(excluded_sellers)}"
+                )
             if product.cost_per_unit is not None and product.minimum_margin is not None:
                 product.sell_price = round(product.cost_per_unit * (1 + product.minimum_margin / 100), 2)
                 product.last_price_update = datetime.utcnow()
@@ -124,8 +133,35 @@ class ProductService:
 
         if product.manual_sell_price is not None:
             product.sell_price = product.manual_sell_price
+            self.log_audit(
+                product_id, "price_change_skipped",
+                product.sell_price, product.sell_price,
+                f"Manual price set (€{product.manual_sell_price}), no automatic update"
+            )
         elif product.cost_per_unit is not None:
-            product.sell_price = self.calculate_sell_price(price, product.cost_per_unit, product.minimum_margin)
+            new_price = self.calculate_sell_price(price, product.cost_per_unit, product.minimum_margin)
+            current_price = product.sell_price or 0
+            
+            if excluded_sellers:
+                reason_suffix = f" (excluded sellers: {', '.join(excluded_sellers)})"
+            else:
+                reason_suffix = ""
+            
+            if current_price > 0 and new_price != current_price:
+                old_price = product.sell_price
+                product.sell_price = new_price
+                self.log_audit(
+                    product_id, "price_change",
+                    old_price, new_price,
+                    f"Price changed from €{old_price} to €{new_price} because {seller} at €{price}{reason_suffix}"
+                )
+            elif current_price == 0:
+                product.sell_price = new_price
+                self.log_audit(
+                    product_id, "price_change",
+                    current_price, new_price,
+                    f"Price set to €{new_price} because {seller} at €{price}{reason_suffix}"
+                )
 
         history = PriceHistory(
             product_id=product_id,
@@ -148,20 +184,18 @@ class ProductService:
             .all()
         )
 
-    def get_products_needing_update(self) -> List[Product]:
+    def run_scheduled_updates_sync(self):
+        self.db.expire_all()
         products = self.get_all_products()
-        now = datetime.utcnow()
-        result = []
-
         for p in products:
-            if not p.last_price_update:
-                result.append(p)
-                continue
-            interval = timedelta(hours=p.update_interval_hours or 24)
-            if now - p.last_price_update >= interval:
-                result.append(p)
+            try:
+                import asyncio
+                asyncio.run(self.scrape_and_update_price(p.id))
+            except Exception as e:
+                print(f"Update failed for {p.name}: {e}")
 
-        return result
+    def get_products_needing_update(self) -> List[Product]:
+        return self.get_all_products()
 
     async def run_scheduled_updates(self):
         products = self.get_products_needing_update()
@@ -170,3 +204,45 @@ class ProductService:
                 await self.scrape_and_update_price(p.id)
             except Exception as e:
                 print(f"Update failed for {p.name}: {e}")
+
+    def get_excluded_sellers(self) -> List[str]:
+        sellers = self.db.query(ExcludedSeller).all()
+        return [s.seller_name for s in sellers]
+
+    def add_excluded_seller(self, seller_name: str, reason: str = None) -> ExcludedSeller:
+        seller = ExcludedSeller(seller_name=seller_name, reason=reason)
+        self.db.add(seller)
+        self.db.commit()
+        self.db.refresh(seller)
+        return seller
+
+    def remove_excluded_seller(self, seller_name: str) -> bool:
+        seller = self.db.query(ExcludedSeller).filter(ExcludedSeller.seller_name == seller_name).first()
+        if not seller:
+            return False
+        self.db.delete(seller)
+        self.db.commit()
+        return True
+
+    def get_all_excluded_sellers(self) -> List[ExcludedSeller]:
+        return self.db.query(ExcludedSeller).all()
+
+    def log_audit(self, product_id: int, action: str, old_value: float, new_value: float, reason: str):
+        log = AuditLog(
+            product_id=product_id,
+            action=action,
+            old_value=old_value,
+            new_value=new_value,
+            reason=reason
+        )
+        self.db.add(log)
+        self.db.commit()
+
+    def get_audit_logs(self, product_id: int, limit: int = 50) -> List[AuditLog]:
+        return (
+            self.db.query(AuditLog)
+            .filter(AuditLog.product_id == product_id)
+            .order_by(AuditLog.timestamp.desc())
+            .limit(limit)
+            .all()
+        )

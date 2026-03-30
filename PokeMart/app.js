@@ -260,3 +260,4 @@ document.getElementById("cart-modal").addEventListener("click", (e) => {
 });
 
 fetchProducts();
+setInterval(fetchProducts, 2000);

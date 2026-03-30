@@ -13,7 +13,7 @@ router = APIRouter(prefix="/products", tags=["products"])
 
 
 @router.post("", response_model=ProductResponse)
-def add_product(product: ProductCreate, db: Session = Depends(get_db)):
+async def add_product(product: ProductCreate, db: Session = Depends(get_db)):
     service = ProductService(db)
     new_product = service.add_product(
         name=product.name,
@@ -22,10 +22,12 @@ def add_product(product: ProductCreate, db: Session = Depends(get_db)):
         cost_per_unit=product.cost_per_unit,
         image_data=product.image_data,
         description=product.description,
-        update_interval_hours=product.update_interval_hours,
         minimum_margin=product.minimum_margin,
         manual_sell_price=product.manual_sell_price
     )
+
+    await service.scrape_and_update_price(new_product.id)
+    new_product = service.get_product(new_product.id)
 
     image_data_list = []
     if new_product.image_data:
@@ -47,7 +49,6 @@ def add_product(product: ProductCreate, db: Session = Depends(get_db)):
         last_price_update=new_product.last_price_update.isoformat() if new_product.last_price_update else None,
         image_data=image_data_list,
         description=new_product.description,
-        update_interval_hours=new_product.update_interval_hours,
         minimum_margin=new_product.minimum_margin
     )
 
@@ -79,7 +80,6 @@ def get_products(db: Session = Depends(get_db)):
             last_price_update=p.last_price_update.isoformat() if p.last_price_update else None,
             image_data=image_data_list,
             description=p.description,
-            update_interval_hours=p.update_interval_hours,
             minimum_margin=p.minimum_margin
         ))
 
@@ -116,7 +116,6 @@ async def update_price(product_id: int, db: Session = Depends(get_db)):
         last_price_update=product.last_price_update.isoformat() if product.last_price_update else None,
         image_data=image_data_list,
         description=product.description,
-        update_interval_hours=product.update_interval_hours,
         minimum_margin=product.minimum_margin
     )
 
@@ -156,7 +155,6 @@ def update_product(product_id: int, product: ProductCreate, db: Session = Depend
         quantity=product.quantity,
         cost_per_unit=product.cost_per_unit,
         description=product.description,
-        update_interval_hours=product.update_interval_hours,
         minimum_margin=product.minimum_margin,
         image_data=product.image_data,
         manual_sell_price=product.manual_sell_price
@@ -185,6 +183,5 @@ def update_product(product_id: int, product: ProductCreate, db: Session = Depend
         last_price_update=updated.last_price_update.isoformat() if updated.last_price_update else None,
         image_data=image_data_list,
         description=updated.description,
-        update_interval_hours=updated.update_interval_hours,
         minimum_margin=updated.minimum_margin
     )

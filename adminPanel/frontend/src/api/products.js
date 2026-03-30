@@ -106,3 +106,54 @@ export const getSchedulerStatus = async () => {
   
   return response.json();
 };
+
+export const getExcludedSellers = async () => {
+  const response = await fetch(`${API_URL}/sellers/excluded`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch excluded sellers');
+  }
+  
+  return response.json();
+};
+
+export const addExcludedSeller = async (sellerName, reason = null) => {
+  const response = await fetch(`${API_URL}/sellers/excluded`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ seller_name: sellerName, reason }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.detail || 'Failed to add excluded seller');
+  }
+
+  return data;
+};
+
+export const removeExcludedSeller = async (sellerName) => {
+  const response = await fetch(`${API_URL}/sellers/excluded/${sellerName}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.detail || 'Failed to remove excluded seller');
+  }
+
+  return true;
+};
+
+export const getAuditLogs = async (productId, limit = 50) => {
+  const response = await fetch(`${API_URL}/audit/products/${productId}?limit=${limit}`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch audit logs');
+  }
+  
+  return response.json();
+};

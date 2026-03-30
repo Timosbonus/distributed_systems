@@ -5,12 +5,11 @@ from typing import Optional, List
 class ProductBase(BaseModel):
     name: str
     idealo_link: str
-    quantity: Optional[int] = 0
-    cost_per_unit: Optional[float] = None
+    quantity: int
+    cost_per_unit: float
+    minimum_margin: float
     image_data: Optional[List[str]] = None
     description: Optional[str] = None
-    update_interval_hours: Optional[int] = 24
-    minimum_margin: Optional[float] = None
     manual_sell_price: Optional[float] = None
 
 
