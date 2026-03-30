@@ -34,6 +34,8 @@ function ProductList() {
 
   useEffect(() => {
     loadProducts();
+    const interval = setInterval(loadProducts, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadProducts = async () => {
