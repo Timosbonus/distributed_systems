@@ -38,9 +38,12 @@ def get_excluded_sellers(db: Session = Depends(get_db)):
 
 
 @router.post("/excluded", response_model=ExcludedSellerResponse)
-def add_excluded_seller(seller: ExcludedSellerCreate, db: Session = Depends(get_db)):
+async def add_excluded_seller(seller: ExcludedSellerCreate, db: Session = Depends(get_db)):
     service = ProductService(db)
     new_seller = service.add_excluded_seller(seller.seller_name, seller.reason)
+    
+    await service.run_scheduled_updates()
+    
     return ExcludedSellerResponse(
         id=new_seller.id,
         seller_name=new_seller.seller_name,
@@ -50,9 +53,12 @@ def add_excluded_seller(seller: ExcludedSellerCreate, db: Session = Depends(get_
 
 
 @router.delete("/excluded/{seller_name}")
-def remove_excluded_seller(seller_name: str, db: Session = Depends(get_db)):
+async def remove_excluded_seller(seller_name: str, db: Session = Depends(get_db)):
     service = ProductService(db)
     success = service.remove_excluded_seller(seller_name)
     if not success:
         return {"message": "Seller not found"}
+    
+    await service.run_scheduled_updates()
+    
     return {"message": "Seller removed from exclusion list"}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getExcludedSellers, addExcludedSeller, removeExcludedSeller } from '../api/products';
+import { getExcludedSellers, addExcludedSeller, removeExcludedSeller, runScheduler } from '../api/products';
 
-function ExcludedSellers({ isOpen, onClose }) {
+function ExcludedSellers({ isOpen, onClose, onRefresh }) {
   const [sellers, setSellers] = useState([]);
   const [newSeller, setNewSeller] = useState('');
   const [reason, setReason] = useState('');
@@ -26,9 +26,11 @@ function ExcludedSellers({ isOpen, onClose }) {
     setLoading(true);
     try {
       await addExcludedSeller(newSeller.trim(), reason || null);
+      await runScheduler();
       setNewSeller('');
       setReason('');
       loadSellers();
+      if (onRefresh) onRefresh();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -39,7 +41,9 @@ function ExcludedSellers({ isOpen, onClose }) {
   const handleRemove = async (sellerName) => {
     try {
       await removeExcludedSeller(sellerName);
+      await runScheduler();
       loadSellers();
+      if (onRefresh) onRefresh();
     } catch (err) {
       alert(err.message);
     }

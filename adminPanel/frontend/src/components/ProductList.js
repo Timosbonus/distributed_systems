@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { getProducts, addProduct, updateProduct, updateProductPrice, deleteProduct, runScheduler, getSchedulerStatus, getPriceHistory, getPendingSuggestions } from '../api/products';
+import { getProducts, addProduct, updateProduct, updateProductPrice, deleteProduct, getPriceHistory } from '../api/products';
 import ProductCard from './ProductCard';
 import ProductFormModal from './ProductFormModal';
 import PriceHistory from './PriceHistory';
 import ExcludedSellers from './ExcludedSellers';
 import AuditLog from './AuditLog';
-import Suggestions from './Suggestions';
 
 const initialFormData = {
   name: '',
@@ -14,7 +13,6 @@ const initialFormData = {
   cost_per_unit: '',
   description: '',
   image_data: [],
-  update_interval_hours: 24,
   minimum_margin: '',
   manual_sell_price: ''
 };
@@ -26,34 +24,17 @@ function ProductList() {
   const [error, setError] = useState('');
   const [loadingPrice, setLoadingPrice] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState({});
-  const [schedulerRunning, setSchedulerRunning] = useState(false);
-  const [schedulerStatus, setSchedulerStatus] = useState(null);
   const [selectedHistory, setSelectedHistory] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
   const [historyProductName, setHistoryProductName] = useState('');
   const [showExcludedSellers, setShowExcludedSellers] = useState(false);
   const [selectedAuditProduct, setSelectedAuditProduct] = useState(null);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestionCount, setSuggestionCount] = useState(0);
   
   const [formData, setFormData] = useState(initialFormData);
 
   useEffect(() => {
     loadProducts();
-    loadSchedulerStatus();
-    loadSuggestionCount();
-    const interval = setInterval(loadSchedulerStatus, 30000);
-    return () => clearInterval(interval);
   }, []);
-
-  const loadSuggestionCount = async () => {
-    try {
-      const suggestions = await getPendingSuggestions();
-      setSuggestionCount(suggestions.length);
-    } catch (err) {
-      console.error('Failed to load suggestion count');
-    }
-  };
 
   const loadProducts = async () => {
     try {
@@ -61,30 +42,6 @@ function ProductList() {
       setProducts(data);
     } catch (err) {
       setError(err.message);
-    }
-  };
-
-  const loadSchedulerStatus = async () => {
-    try {
-      const status = await getSchedulerStatus();
-      setSchedulerStatus(status);
-    } catch (err) {
-      console.error('Failed to load scheduler status');
-    }
-  };
-
-  const handleRunScheduler = async () => {
-    setSchedulerRunning(true);
-    setError('');
-    try {
-      const result = await runScheduler();
-      loadProducts();
-      loadSchedulerStatus();
-      alert(`Updated ${result.updated.length} products${result.failed.length > 0 ? `, ${result.failed.length} failed` : ''}`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSchedulerRunning(false);
     }
   };
 
@@ -99,7 +56,6 @@ function ProductList() {
         quantity: formData.quantity || 0,
         description: formData.description || null,
         image_data: formData.image_data || null,
-        update_interval_hours: formData.update_interval_hours || 24,
         cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : null,
         minimum_margin: formData.minimum_margin ? parseFloat(formData.minimum_margin) : null,
         manual_sell_price: formData.manual_sell_price ? parseFloat(formData.manual_sell_price) : null
@@ -129,7 +85,6 @@ function ProductList() {
       cost_per_unit: product.cost_per_unit || '',
       description: product.description || '',
       image_data: product.image_data || [],
-      update_interval_hours: product.update_interval_hours || 24,
       minimum_margin: product.minimum_margin || '',
       manual_sell_price: product.manual_sell_price || ''
     });
@@ -210,28 +165,10 @@ function ProductList() {
           <h1 className="text-3xl font-bold">Products</h1>
           <div className="flex gap-2">
             <button
-              onClick={() => setShowSuggestions(true)}
-              className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 transition relative"
-            >
-              Suggestions
-              {suggestionCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  {suggestionCount}
-                </span>
-              )}
-            </button>
-            <button
               onClick={() => setShowExcludedSellers(true)}
               className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 transition"
             >
               Excluded Sellers
-            </button>
-            <button
-              onClick={handleRunScheduler}
-              disabled={schedulerRunning}
-              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition disabled:opacity-50"
-            >
-              {schedulerRunning ? 'Updating...' : 'Run Scheduler'}
             </button>
             <button
               onClick={() => setShowForm(!showForm)}
@@ -241,12 +178,6 @@ function ProductList() {
             </button>
           </div>
         </div>
-
-        {schedulerStatus && schedulerStatus.products_needing_update > 0 && (
-          <div className="mb-4 p-3 rounded bg-yellow-100 text-yellow-700">
-            {schedulerStatus.products_needing_update} product(s) need price updates
-          </div>
-        )}
 
         {error && (
           <div className="mb-4 p-3 rounded bg-red-100 text-red-700">
@@ -274,18 +205,13 @@ function ProductList() {
         <ExcludedSellers
           isOpen={showExcludedSellers}
           onClose={() => setShowExcludedSellers(false)}
+          onRefresh={loadProducts}
         />
 
         <AuditLog
           isOpen={!!selectedAuditProduct}
           onClose={() => setSelectedAuditProduct(null)}
           productId={selectedAuditProduct}
-        />
-
-        <Suggestions
-          isOpen={showSuggestions}
-          onClose={() => { setShowSuggestions(false); loadProducts(); }}
-          onRefresh={loadProducts}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

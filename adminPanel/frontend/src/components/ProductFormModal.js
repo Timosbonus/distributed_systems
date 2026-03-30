@@ -94,19 +94,6 @@ function ProductFormModal({ isOpen, onClose, onSubmit, editingProduct, formData,
 
               <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Update Interval (hours)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.update_interval_hours}
-                  onChange={(e) => setFormData({ ...formData, update_interval_hours: parseInt(e.target.value) || 24 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
                   Minimum Margin (%)
                 </label>
                 <input

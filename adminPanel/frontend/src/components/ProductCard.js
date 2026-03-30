@@ -70,10 +70,6 @@ function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onU
               <span className="ml-1 text-xs text-green-600">(manual)</span>
             )}
           </div>
-          <div>
-            <span className="text-gray-500">Interval:</span>
-            <span className="ml-1 font-medium">{product.update_interval_hours}h</span>
-          </div>
           {product.minimum_margin !== null && product.minimum_margin !== undefined && (
             <div>
               <span className="text-gray-500">Min Margin:</span>

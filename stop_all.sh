@@ -14,5 +14,8 @@ pkill -f "http.server 8080" 2>/dev/null
 echo "Stopping PokeMart (port 81)..."
 pkill -f "http.server 81" 2>/dev/null
 
+echo "Stopping Price Randomizer..."
+pkill -f "price_randomizer.py" 2>/dev/null
+
 echo ""
 echo "=== All services stopped ==="
