@@ -22,14 +22,13 @@ class ProductService:
                 return round(cost * 1.01, 2)
             return None
 
-        if lowest_price <= cost:
-            if minimum_margin:
-                return round(cost * (1 + minimum_margin / 100), 2)
-            return round(cost * 1.01, 2)
+        if cost is None:
+            return round(lowest_price - 0.01, 2)
 
-        margin = lowest_price - cost
-        if minimum_margin and margin < (lowest_price * minimum_margin / 100):
-            return round(lowest_price - (lowest_price * minimum_margin / 100) + 0.01, 2)
+        floor_price = round(cost * (1 + minimum_margin / 100), 2) if minimum_margin else round(cost * 1.01, 2)
+
+        if floor_price >= lowest_price:
+            return floor_price
 
         return round(lowest_price - 0.01, 2)
 
