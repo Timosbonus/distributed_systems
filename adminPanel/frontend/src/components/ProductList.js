@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getProducts, addProduct, updateProduct, updateProductPrice, deleteProduct, getPriceHistory } from '../api/products';
+import { getProducts, addProduct, updateProduct, deleteProduct, getPriceHistory } from '../api/products';
 import ProductCard from './ProductCard';
 import ProductFormModal from './ProductFormModal';
 import PriceHistory from './PriceHistory';
@@ -22,7 +22,6 @@ function ProductList() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
-  const [loadingPrice, setLoadingPrice] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState({});
   const [selectedHistory, setSelectedHistory] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
@@ -97,19 +96,6 @@ function ProductList() {
     setEditingId(null);
     setFormData(initialFormData);
     setShowForm(false);
-  };
-
-  const handleUpdatePrice = async (productId) => {
-    setLoadingPrice(productId);
-    setError('');
-    try {
-      await updateProductPrice(productId);
-      loadProducts();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoadingPrice(null);
-    }
   };
 
   const handleDelete = async (productId) => {
@@ -224,12 +210,10 @@ function ProductList() {
               currentImageIndex={currentImageIndex[product.id]}
               onPrevImage={prevImage}
               onNextImage={nextImage}
-              onUpdatePrice={handleUpdatePrice}
               onViewHistory={handleViewHistory}
               onViewAudit={handleViewAudit}
               onEdit={handleEdit}
               onDelete={handleDelete}
-              loadingPrice={loadingPrice}
             />
           ))}
           {products.length === 0 && (

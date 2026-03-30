@@ -1,4 +1,4 @@
-function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onUpdatePrice, onViewHistory, onViewAudit, onEdit, onDelete, loadingPrice }) {
+function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onViewHistory, onViewAudit, onEdit, onDelete }) {
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Never';
     const date = new Date(dateStr);
@@ -55,7 +55,7 @@ function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onU
           <div className="col-span-2">
             <span className="text-gray-500">Lowest Price:</span>
             <span className="ml-1 font-medium text-green-600">
-              {loadingPrice === product.id ? 'Updating...' : (product.lowest_price ? `€${product.lowest_price.toFixed(2)}` : '-')}
+              {product.lowest_price ? `€${product.lowest_price.toFixed(2)}` : '-'}
             </span>
             {product.lowest_seller && (
               <span className="ml-1 text-xs text-gray-500">({product.lowest_seller})</span>
@@ -88,15 +88,8 @@ function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onU
 
         <div className="mt-4 flex gap-1 justify-between">
           <button
-            onClick={() => onUpdatePrice(product.id)}
-            disabled={loadingPrice === product.id}
-            className="bg-yellow-500 text-white py-2 px-2 rounded hover:bg-yellow-600 transition disabled:opacity-50 text-xs font-medium flex-1"
-          >
-            Update
-          </button>
-          <button
             onClick={() => onViewHistory(product)}
-            className="bg-purple-500 text-white py-2 px-2 rounded hover:bg-purple-600 transition text-xs font-medium"
+            className="bg-purple-500 text-white py-2 px-2 rounded hover:bg-purple-600 transition text-xs font-medium flex-1"
           >
             History
           </button>

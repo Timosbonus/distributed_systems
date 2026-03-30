@@ -61,6 +61,10 @@ class ProductService:
         product = self.get_product(product_id)
         if not product:
             return False
+        
+        self.db.query(PriceHistory).filter(PriceHistory.product_id == product_id).delete()
+        self.db.query(AuditLog).filter(AuditLog.product_id == product_id).delete()
+        
         self.db.delete(product)
         self.db.commit()
         return True
