@@ -1,6 +1,14 @@
 const MAX_IMAGES = 5;
 
-function ProductFormModal({ isOpen, onClose, onSubmit, editingProduct, formData, setFormData, error }) {
+function ProductFormModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  editingProduct,
+  formData,
+  setFormData,
+  error,
+}) {
   if (!isOpen) return null;
 
   const handleImageUpload = (e) => {
@@ -19,7 +27,10 @@ function ProductFormModal({ isOpen, onClose, onSubmit, editingProduct, formData,
         newImages.push(reader.result);
         loadedCount++;
         if (loadedCount === files.length) {
-          setFormData({ ...formData, image_data: [...formData.image_data, ...newImages] });
+          setFormData({
+            ...formData,
+            image_data: [...formData.image_data, ...newImages],
+          });
         }
       };
       reader.readAsDataURL(file);
@@ -35,33 +46,44 @@ function ProductFormModal({ isOpen, onClose, onSubmit, editingProduct, formData,
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
         <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-xl font-bold">{editingProduct ? 'Edit Product' : 'Add New Product'}</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+          <h2 className="text-xl font-bold">
+            {editingProduct ? "Edit Product" : "Add New Product"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 text-2xl"
+          >
+            &times;
+          </button>
         </div>
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
           <form onSubmit={onSubmit}>
             <div className="grid grid-cols-2 gap-4">
               <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Product Name
+                  Product Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
               </div>
-              
+
               <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Idealo Link
+                  Idealo Link <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="url"
                   value={formData.idealo_link}
-                  onChange={(e) => setFormData({ ...formData, idealo_link: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, idealo_link: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
@@ -69,41 +91,60 @@ function ProductFormModal({ isOpen, onClose, onSubmit, editingProduct, formData,
 
               <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Quantity
+                  Quantity <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
                   value={formData.quantity}
-                  onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      quantity: parseInt(e.target.value) || 0,
+                    })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  min="0"
                 />
               </div>
 
               <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Cost per Unit
+                  Cost per Unit <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   value={formData.cost_per_unit}
-                  onChange={(e) => setFormData({ ...formData, cost_per_unit: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, cost_per_unit: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  min="0"
                 />
               </div>
 
               <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Minimum Margin (%)
+                  Minimum Margin (%) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
                   min="0"
                   step="0.1"
-                  value={formData.minimum_margin || ''}
-                  onChange={(e) => setFormData({ ...formData, minimum_margin: e.target.value ? parseFloat(e.target.value) : null })}
+                  value={formData.minimum_margin || ""}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      minimum_margin: e.target.value
+                        ? parseFloat(e.target.value)
+                        : null,
+                    })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g. 10"
+                  required
                 />
               </div>
 
@@ -115,15 +156,24 @@ function ProductFormModal({ isOpen, onClose, onSubmit, editingProduct, formData,
                   <input
                     type="number"
                     step="0.01"
-                    value={formData.manual_sell_price || ''}
-                    onChange={(e) => setFormData({ ...formData, manual_sell_price: e.target.value ? parseFloat(e.target.value) : null })}
+                    value={formData.manual_sell_price || ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        manual_sell_price: e.target.value
+                          ? parseFloat(e.target.value)
+                          : null,
+                      })
+                    }
                     className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Leave empty for auto-calculated"
                   />
                   {formData.manual_sell_price && (
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, manual_sell_price: null })}
+                      onClick={() =>
+                        setFormData({ ...formData, manual_sell_price: null })
+                      }
                       className="px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600"
                     >
                       Clear
@@ -138,7 +188,9 @@ function ProductFormModal({ isOpen, onClose, onSubmit, editingProduct, formData,
                 </label>
                 <textarea
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   rows="2"
                 />
@@ -160,7 +212,11 @@ function ProductFormModal({ isOpen, onClose, onSubmit, editingProduct, formData,
                   <div className="mt-2 flex flex-wrap gap-2">
                     {formData.image_data.map((img, idx) => (
                       <div key={idx} className="relative">
-                        <img src={img} alt={`Preview ${idx + 1}`} className="h-24 w-24 object-contain rounded border border-gray-200" />
+                        <img
+                          src={img}
+                          alt={`Preview ${idx + 1}`}
+                          className="h-24 w-24 object-contain rounded border border-gray-200"
+                        />
                         <button
                           type="button"
                           onClick={() => removeImage(idx)}
@@ -180,7 +236,7 @@ function ProductFormModal({ isOpen, onClose, onSubmit, editingProduct, formData,
                 type="submit"
                 className="flex-1 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition"
               >
-                {editingProduct ? 'Update Product' : 'Add Product'}
+                {editingProduct ? "Update Product" : "Add Product"}
               </button>
               <button
                 type="button"

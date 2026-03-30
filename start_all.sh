@@ -19,7 +19,7 @@ python3 -m http.server 8080 &
 cd ..
 
 echo "[4/5] Starting PokeIdealo on port 81..."
-cd PokeIdealo
+cd PokeMart
 python3 -m http.server 81 &
 cd ..
 

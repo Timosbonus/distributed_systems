@@ -50,6 +50,11 @@ function ProductList() {
     e.preventDefault();
     setError('');
 
+    if (!formData.name || !formData.idealo_link || !formData.cost_per_unit || !formData.minimum_margin) {
+      setError('Name, link, cost per unit, and minimum margin are required');
+      return;
+    }
+
     try {
       const productData = {
         name: formData.name,
@@ -57,8 +62,8 @@ function ProductList() {
         quantity: formData.quantity || 0,
         description: formData.description || null,
         image_data: formData.image_data || null,
-        cost_per_unit: formData.cost_per_unit ? parseFloat(formData.cost_per_unit) : null,
-        minimum_margin: formData.minimum_margin ? parseFloat(formData.minimum_margin) : null,
+        cost_per_unit: parseFloat(formData.cost_per_unit),
+        minimum_margin: parseFloat(formData.minimum_margin),
         manual_sell_price: formData.manual_sell_price ? parseFloat(formData.manual_sell_price) : null
       };
       

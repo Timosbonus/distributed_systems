@@ -6,7 +6,7 @@ function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onV
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
       {product.image_data && product.image_data.length > 0 ? (
         <div className="relative h-36 bg-gray-100">
           <img 
@@ -83,10 +83,10 @@ function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onV
         </div>
 
         {product.description && (
-          <p className="mt-2 text-sm text-gray-600 line-clamp-2">{product.description}</p>
+          <p className="mt-2 text-sm text-gray-600 line-clamp-2 flex-grow">{product.description}</p>
         )}
 
-        <div className="mt-4 flex gap-1 justify-between">
+        <div className="mt-auto pt-4 flex gap-1 justify-between">
           <button
             onClick={() => onViewHistory(product)}
             className="bg-purple-500 text-white py-2 px-2 rounded hover:bg-purple-600 transition text-xs font-medium flex-1"

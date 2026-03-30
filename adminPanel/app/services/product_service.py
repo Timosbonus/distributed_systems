@@ -184,18 +184,18 @@ class ProductService:
             .all()
         )
 
-    def get_products_needing_update(self) -> List[Product]:
-        return self.get_all_products()
-
     def run_scheduled_updates_sync(self):
         self.db.expire_all()
-        products = self.get_products_needing_update()
+        products = self.get_all_products()
         for p in products:
             try:
                 import asyncio
                 asyncio.run(self.scrape_and_update_price(p.id))
             except Exception as e:
                 print(f"Update failed for {p.name}: {e}")
+
+    def get_products_needing_update(self) -> List[Product]:
+        return self.get_all_products()
 
     async def run_scheduled_updates(self):
         products = self.get_products_needing_update()
