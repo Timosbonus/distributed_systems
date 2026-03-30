@@ -4,6 +4,9 @@ import json
 
 from app.models.product import Product
 from app.models.price_history import PriceHistory
+from app.models.excluded_seller import ExcludedSeller
+from app.models.audit_log import AuditLog
+from app.models.suggested_price import SuggestedPrice
 from app.services.scraper import Scraper
 
 
@@ -11,6 +14,7 @@ class ProductService:
     def __init__(self, db_session):
         self.db = db_session
         self.scraper = Scraper()
+        self.price_change_threshold = 5.0
 
     def calculate_sell_price(self, lowest_price: Optional[float], cost: Optional[float], minimum_margin: Optional[float] = None) -> Optional[float]:
         if lowest_price is None:
@@ -106,9 +110,16 @@ class ProductService:
         if not product:
             return None
 
-        result = await self.scraper.fetch_and_scrape(product.idealo_link)
+        excluded_sellers = self.get_excluded_sellers()
+        result = await self.scraper.fetch_and_scrape(product.idealo_link, excluded_sellers=excluded_sellers)
 
         if not result:
+            if excluded_sellers:
+                self.log_audit(
+                    product_id, "scrape_failed",
+                    product.sell_price, product.sell_price,
+                    f"Price update skipped - all sellers excluded: {', '.join(excluded_sellers)}"
+                )
             if product.cost_per_unit is not None and product.minimum_margin is not None:
                 product.sell_price = round(product.cost_per_unit * (1 + product.minimum_margin / 100), 2)
                 product.last_price_update = datetime.utcnow()
@@ -125,7 +136,40 @@ class ProductService:
         if product.manual_sell_price is not None:
             product.sell_price = product.manual_sell_price
         elif product.cost_per_unit is not None:
-            product.sell_price = self.calculate_sell_price(price, product.cost_per_unit, product.minimum_margin)
+            new_price = self.calculate_sell_price(price, product.cost_per_unit, product.minimum_margin)
+            current_price = product.sell_price or 0
+            
+            if excluded_sellers:
+                reason_suffix = f" (excluded sellers: {', '.join(excluded_sellers)})"
+            else:
+                reason_suffix = ""
+            
+            if current_price > 0 and new_price != current_price:
+                percent_change = abs((new_price - current_price) / current_price * 100)
+                if percent_change > self.price_change_threshold:
+                    self.create_suggested_price(
+                        product_id, new_price, current_price, price, seller
+                    )
+                    self.log_audit(
+                        product_id, "price_suggestion_created",
+                        current_price, new_price,
+                        f"Price change of {percent_change:.1f}% suggested (€{current_price} -> €{new_price}) due to {seller} at €{price}{reason_suffix}"
+                    )
+                else:
+                    old_price = product.sell_price
+                    product.sell_price = new_price
+                    self.log_audit(
+                        product_id, "price_change",
+                        old_price, new_price,
+                        f"Price lowered from €{old_price} to €{new_price} because {seller} dropped to €{price}{reason_suffix}"
+                    )
+            else:
+                product.sell_price = new_price
+                self.log_audit(
+                    product_id, "price_change",
+                    current_price, new_price,
+                    f"Price set to €{new_price} because {seller} at €{price}{reason_suffix}"
+                )
 
         history = PriceHistory(
             product_id=product_id,
@@ -170,3 +214,93 @@ class ProductService:
                 await self.scrape_and_update_price(p.id)
             except Exception as e:
                 print(f"Update failed for {p.name}: {e}")
+
+    def get_excluded_sellers(self) -> List[str]:
+        sellers = self.db.query(ExcludedSeller).all()
+        return [s.seller_name for s in sellers]
+
+    def add_excluded_seller(self, seller_name: str, reason: str = None) -> ExcludedSeller:
+        seller = ExcludedSeller(seller_name=seller_name, reason=reason)
+        self.db.add(seller)
+        self.db.commit()
+        self.db.refresh(seller)
+        return seller
+
+    def remove_excluded_seller(self, seller_name: str) -> bool:
+        seller = self.db.query(ExcludedSeller).filter(ExcludedSeller.seller_name == seller_name).first()
+        if not seller:
+            return False
+        self.db.delete(seller)
+        self.db.commit()
+        return True
+
+    def get_all_excluded_sellers(self) -> List[ExcludedSeller]:
+        return self.db.query(ExcludedSeller).all()
+
+    def log_audit(self, product_id: int, action: str, old_value: float, new_value: float, reason: str):
+        log = AuditLog(
+            product_id=product_id,
+            action=action,
+            old_value=old_value,
+            new_value=new_value,
+            reason=reason
+        )
+        self.db.add(log)
+        self.db.commit()
+
+    def get_audit_logs(self, product_id: int, limit: int = 50) -> List[AuditLog]:
+        return (
+            self.db.query(AuditLog)
+            .filter(AuditLog.product_id == product_id)
+            .order_by(AuditLog.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def create_suggested_price(self, product_id: int, suggested_price: float, current_price: float,
+                                competitor_price: float, competitor_name: str) -> SuggestedPrice:
+        percent_change = abs((suggested_price - current_price) / current_price * 100) if current_price > 0 else 0
+        suggestion = SuggestedPrice(
+            product_id=product_id,
+            suggested_price=suggested_price,
+            current_price=current_price,
+            competitor_price=competitor_price,
+            competitor_name=competitor_name,
+            percentage_change=percent_change,
+            status="pending"
+        )
+        self.db.add(suggestion)
+        self.db.commit()
+        self.db.refresh(suggestion)
+        return suggestion
+
+    def get_pending_suggestions(self) -> List[SuggestedPrice]:
+        return self.db.query(SuggestedPrice).filter(SuggestedPrice.status == "pending").all()
+
+    def approve_suggestion(self, suggestion_id: int) -> Optional[SuggestedPrice]:
+        suggestion = self.db.query(SuggestedPrice).filter(SuggestedPrice.id == suggestion_id).first()
+        if not suggestion:
+            return None
+        product = self.get_product(suggestion.product_id)
+        if not product:
+            return None
+        old_price = product.sell_price
+        product.sell_price = suggestion.suggested_price
+        suggestion.status = "approved"
+        self.db.commit()
+        self.log_audit(
+            product.id, "price_change_approved",
+            old_price, suggestion.suggested_price,
+            f"Approved price change from €{old_price} to €{suggestion.suggested_price} (suggested due to {suggestion.competitor_name} at €{suggestion.competitor_price})"
+        )
+        self.db.refresh(suggestion)
+        return suggestion
+
+    def reject_suggestion(self, suggestion_id: int) -> Optional[SuggestedPrice]:
+        suggestion = self.db.query(SuggestedPrice).filter(SuggestedPrice.id == suggestion_id).first()
+        if not suggestion:
+            return None
+        suggestion.status = "rejected"
+        self.db.commit()
+        self.db.refresh(suggestion)
+        return suggestion

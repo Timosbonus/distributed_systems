@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.db.database import get_engine, create_tables
 from app.core.config import settings
-from app.routers import products, auth, scheduler
+from app.routers import products, auth, scheduler, sellers, audit, pricing
 from app.internal import admin
 from app.services.product_service import ProductService
 from app.dependencies import get_database
@@ -45,4 +45,7 @@ app.add_middleware(
 app.include_router(products.router)
 app.include_router(auth.router)
 app.include_router(scheduler.router)
+app.include_router(sellers.router)
+app.include_router(audit.router)
+app.include_router(pricing.router)
 app.include_router(admin.router)

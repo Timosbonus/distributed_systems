@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { getProducts, addProduct, updateProduct, updateProductPrice, deleteProduct, runScheduler, getSchedulerStatus, getPriceHistory } from '../api/products';
+import { getProducts, addProduct, updateProduct, updateProductPrice, deleteProduct, runScheduler, getSchedulerStatus, getPriceHistory, getPendingSuggestions } from '../api/products';
 import ProductCard from './ProductCard';
 import ProductFormModal from './ProductFormModal';
 import PriceHistory from './PriceHistory';
+import ExcludedSellers from './ExcludedSellers';
+import AuditLog from './AuditLog';
+import Suggestions from './Suggestions';
 
 const initialFormData = {
   name: '',
@@ -28,15 +31,29 @@ function ProductList() {
   const [selectedHistory, setSelectedHistory] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
   const [historyProductName, setHistoryProductName] = useState('');
+  const [showExcludedSellers, setShowExcludedSellers] = useState(false);
+  const [selectedAuditProduct, setSelectedAuditProduct] = useState(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionCount, setSuggestionCount] = useState(0);
   
   const [formData, setFormData] = useState(initialFormData);
 
   useEffect(() => {
     loadProducts();
     loadSchedulerStatus();
+    loadSuggestionCount();
     const interval = setInterval(loadSchedulerStatus, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const loadSuggestionCount = async () => {
+    try {
+      const suggestions = await getPendingSuggestions();
+      setSuggestionCount(suggestions.length);
+    } catch (err) {
+      console.error('Failed to load suggestion count');
+    }
+  };
 
   const loadProducts = async () => {
     try {
@@ -168,6 +185,10 @@ function ProductList() {
     setHistoryProductName('');
   };
 
+  const handleViewAudit = (productId) => {
+    setSelectedAuditProduct(productId);
+  };
+
   const nextImage = (productId, images) => {
     setCurrentImageIndex(prev => ({
       ...prev,
@@ -188,6 +209,23 @@ function ProductList() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Products</h1>
           <div className="flex gap-2">
+            <button
+              onClick={() => setShowSuggestions(true)}
+              className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 transition relative"
+            >
+              Suggestions
+              {suggestionCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {suggestionCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setShowExcludedSellers(true)}
+              className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 transition"
+            >
+              Excluded Sellers
+            </button>
             <button
               onClick={handleRunScheduler}
               disabled={schedulerRunning}
@@ -233,6 +271,23 @@ function ProductList() {
           priceHistory={priceHistory}
         />
 
+        <ExcludedSellers
+          isOpen={showExcludedSellers}
+          onClose={() => setShowExcludedSellers(false)}
+        />
+
+        <AuditLog
+          isOpen={!!selectedAuditProduct}
+          onClose={() => setSelectedAuditProduct(null)}
+          productId={selectedAuditProduct}
+        />
+
+        <Suggestions
+          isOpen={showSuggestions}
+          onClose={() => { setShowSuggestions(false); loadProducts(); }}
+          onRefresh={loadProducts}
+        />
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {products.map((product) => (
             <ProductCard
@@ -243,6 +298,7 @@ function ProductList() {
               onNextImage={nextImage}
               onUpdatePrice={handleUpdatePrice}
               onViewHistory={handleViewHistory}
+              onViewAudit={handleViewAudit}
               onEdit={handleEdit}
               onDelete={handleDelete}
               loadingPrice={loadingPrice}

@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 
 class Scraper:
@@ -8,7 +8,7 @@ class Scraper:
         text = text.replace("€", "").replace("â\x82¬", "").strip()
         return float(text)
 
-    async def fetch_and_scrape(self, url: str) -> Optional[Dict]:
+    async def fetch_and_scrape(self, url: str, excluded_sellers: List[str] = None) -> Optional[Dict]:
         try:
             response = requests.get(url, timeout=10)
             response.raise_for_status()
@@ -28,6 +28,10 @@ class Scraper:
 
         for offer in pokemon_container.select(".offer"):
             trainer = offer.select_one(".trainer").text.strip()
+            
+            if excluded_sellers and trainer in excluded_sellers:
+                continue
+                
             price = self.parse_price(offer.select_one(".price").text)
 
             if cheapest is None or price < cheapest["price"]:

@@ -1,4 +1,4 @@
-function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onUpdatePrice, onViewHistory, onEdit, onDelete, loadingPrice }) {
+function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onUpdatePrice, onViewHistory, onViewAudit, onEdit, onDelete, loadingPrice }) {
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Never';
     const date = new Date(dateStr);
@@ -90,29 +90,35 @@ function ProductCard({ product, currentImageIndex, onPrevImage, onNextImage, onU
           <p className="mt-2 text-sm text-gray-600 line-clamp-2">{product.description}</p>
         )}
 
-        <div className="mt-4 flex gap-2 flex-wrap">
+        <div className="mt-4 flex gap-1 justify-between">
           <button
             onClick={() => onUpdatePrice(product.id)}
             disabled={loadingPrice === product.id}
-            className="flex-1 bg-yellow-500 text-white py-2 px-3 rounded hover:bg-yellow-600 transition disabled:opacity-50 text-sm"
+            className="bg-yellow-500 text-white py-2 px-2 rounded hover:bg-yellow-600 transition disabled:opacity-50 text-xs font-medium flex-1"
           >
-            Update Price
+            Update
           </button>
           <button
             onClick={() => onViewHistory(product)}
-            className="bg-purple-500 text-white py-2 px-3 rounded hover:bg-purple-600 transition text-sm"
+            className="bg-purple-500 text-white py-2 px-2 rounded hover:bg-purple-600 transition text-xs font-medium"
           >
             History
           </button>
           <button
+            onClick={() => onViewAudit(product.id)}
+            className="bg-gray-500 text-white py-2 px-2 rounded hover:bg-gray-600 transition text-xs font-medium"
+          >
+            Audit
+          </button>
+          <button
             onClick={() => onEdit(product)}
-            className="bg-blue-500 text-white py-2 px-3 rounded hover:bg-blue-600 transition text-sm"
+            className="bg-blue-500 text-white py-2 px-2 rounded hover:bg-blue-600 transition text-xs font-medium"
           >
             Edit
           </button>
           <button
             onClick={() => onDelete(product.id)}
-            className="bg-red-500 text-white py-2 px-3 rounded hover:bg-red-600 transition text-sm"
+            className="bg-red-500 text-white py-2 px-2 rounded hover:bg-red-600 transition text-xs font-medium"
           >
             Delete
           </button>
